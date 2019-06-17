@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<title>secure_val</title>
+<meta name="description" content="Sensitive data, like passwords or keying data, should be cleared from memory as soon as they are not needed. This requires ensuring the compiler will not optimize the memory overwrite away. This proposal adds a `secure_clear` function to do so as well as a non-copyable `secure_val` class template which represents a memory area which securely clears itself on destruction and move.">
+<meta name="author" content="Miguel Ojeda">
+<meta property="og:url" content="https://ojeda.io/cpp/secure_val">
+<meta property="og:type" content="website">
+<meta property="og:title" content="secure_val">
+<meta property="og:description" content="Sensitive data, like passwords or keying data, should be cleared from memory as soon as they are not needed. This requires ensuring the compiler will not optimize the memory overwrite away. This proposal adds a `secure_clear` function to do so as well as a non-copyable `secure_val` class template which represents a memory area which securely clears itself on destruction and move.">
+<script type="application/ld+json">
+{
+    "@context": "http://schema.org",
+    "@type": "WebSite",
+    "name": "secure_val",
+    "description": "Sensitive data, like passwords or keying data, should be cleared from memory as soon as they are not needed. This requires ensuring the compiler will not optimize the memory overwrite away. This proposal adds a `secure_clear` function to do so as well as a non-copyable `secure_val` class template which represents a memory area which securely clears itself on destruction and move.",
+    "url": "https://ojeda.io/cpp/secure_val",
+    "author": {
+        "@type": "Person",
+        "name": "Miguel Ojeda",
+        "description": "Software Engineer",
+        "jobTitle": "Software Engineer",
+        "url": "https://ojeda.io",
+        "email": "mailto:miguel@ojeda.io"
+    }
+}
+</script>
+<link rel="icon" href="/favicon.png">
+<link rel="apple-touch-icon-precomposed" href="/favicon-apple.png">
+<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css" integrity="sha384-MCw98/SFnGE8fJT3GXwEOngsV7Zt27NXFoaoApmYm81iuXoPkFOJwJ8ERdknLPMO" crossorigin="anonymous">
+<style>
+@media screen and (min-width: 992px) {
+    body {
+        background-color: #515558;
+    }
+
+    .container {
+        background-color: #ffffff;
+        box-shadow: 3px 3px 3px 1px rgba(0, 0, 0, 0.3);
+        max-width: 900px;
+        margin-top: 2.5rem;
+        margin-bottom: 2.5rem;
+        padding-top: 4rem;
+        padding-bottom: 4rem;
+    }
+}
+
+.col {
+    max-width: 600px;
+}
+
+h1 {
+    margin-top: 2rem;
+}
+
+pre {
+    background-color: #f5faff;
+    border-radius: 0.4em;
+    border-color: #c5c5c5;
+    border-width: 1px;
+    border-style: solid;
+    padding: 0.7em;
+}
+
+a {
+    word-break: break-word;
+}
+
+p, ul > li {
+    text-align: justify;
+}
+</style>
+</head>
+<body>
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col">
+            <h1><code>secure_val</code>: a secure-clear-on-move type</h1>
+<p>Document number: P1315R0 <a href="https://wg21.link/P1315">[latest]</a><br />
+Date: 2018-10-08<br />
+Author: Miguel Ojeda &lt;<a href="mailto:miguel@ojeda.io">miguel@ojeda.io</a>&gt;<br />
+Project: ISO JTC1/SC22/WG21: Programming Language C++<br />
+Audience: LWG, LEWG</p>
+<h2>Abstract</h2>
+<p>Sensitive data, like passwords or keying data, should be cleared from memory as soon as they are not needed. This requires ensuring the compiler will not optimize the memory overwrite away. This proposal adds a <code>secure_clear</code> function to do so as well as a non-copyable <code>secure_val</code> class template which represents a memory area which securely clears itself on destruction and move.</p>
+<h2>The problem</h2>
+<p>When manipulating sensitive data, like passwords in memory or keying data, there is a need for library and application developers to clear the memory after the data is not needed anymore <a href="https://wiki.sei.cmu.edu/confluence/display/c/MSC06-C.+Beware+of+compiler+optimizations" title="MSC06-C. Beware of compiler optimizations">[1]</a><a href="https://cwe.mitre.org/data/definitions/14.html" title="CWE-14: Compiler Removal of Code to Clear Buffers">[2]</a><a href="https://www.viva64.com/en/w/v597/" title="V597. The compiler could delete the `memset` function call (...)">[3]</a><a href="http://www.open-std.org/jtc1/sc22/wg14/www/docs/n1381.pdf" title="N1381 --- #5 `memset_s()` to clear memory, without fear of removal">[4]</a>, in order to minimize the time window where it is possible to capture it (e.g. ending in a core dump or probed by a malicious actor). This requires ensuring the compiler will not optimize away the memory write. In particular, for C++, extra care is needed to consider all exceptional return paths.</p>
+<p>For instance, the following function may be vulnerable, since the compiler may optimize the <code>memset</code> call away because the <code>password</code> buffer is not read from before it goes out of scope:</p>
+<pre><code>void f()
+{
+    constexpr std::size_t size = 100;
+    char password[size];
+
+    getPasswordFromUser(password, size);
+
+    // ...
+
+    usePassword(password, size);
+    std::memset(password, size);
+}
+</code></pre>
+<p>On top of that, <code>usePassword</code> could throw an exception (i.e. assume the stack is not overwritten and/or that the memory is held in the free store).</p>
+<p>There are many ways that developers may use to try to ensure the memory is cleared as expected (i.e. avoiding the optimizer):</p>
+<ul>
+<li>Calling a function defined in another translation unit, assuming LTO/WPO is not enabled.</li>
+<li>Writing memory through a <code>volatile</code> pointer (e.g. <code>decaf_bzero</code> <a href="https://github.com/openssl/openssl/blob/f8385b0fc0215b378b61891582b0579659d0b9f4/crypto/ec/curve448/utils.c" title="`openssl/crypto/ec/curve448/utils.c` (old code)">[5]</a> from OpenSSL).</li>
+<li>Calling <code>memset</code> through a <code>volatile</code> function pointer (e.g. <code>OPENSSL_cleanse</code> C implementation <a href="https://github.com/openssl/openssl/blob/master/crypto/mem_clr.c" title="`OPENSSL_cleanse` (implementation)">[6]</a>).</li>
+<li>Creating a dependency by writing an <code>extern</code> variable into it (e.g. <code>CRYPTO_malloc</code> implementation <a href="https://github.com/openssl/openssl/blob/104ce8a9f02d250dd43c255eb7b8747e81b29422/crypto/mem.c#L143" title="`openssl/crypto/mem.c` (old code)">[7]</a> from OpenSSL).</li>
+<li>Coding the memory write in assembly (e.g. <code>OPENSSL_cleanse</code> SPARC implementation <a href="https://github.com/openssl/openssl/blob/master/crypto/sparccpuid.S#L363" title="`openssl/crypto/sparccpuid.S` (example of assembly implementation)">[8]</a>).</li>
+<li>Introducing a memory barrier (e.g. <code>memzero_explicit</code> implementation <a href="https://elixir.bootlin.com/linux/v4.18.5/source/lib/string.c#L706" title="`memzero_explicit` (implementation)">[9]</a> from the Linux Kernel).</li>
+<li>Disabling specific compiler options/optimizations (e.g. <code>-fno-builtin-memset</code> <a href="https://gcc.gnu.org/onlinedocs/gcc/C-Dialect-Options.html" title="Options Controlling C Dialect">[10]</a> in GCC).</li>
+</ul>
+<p>Or they may use a pre-existing solution whenever available:</p>
+<ul>
+<li>Using an operating system-provided API (e.g. <code>explicit_bzero</code> <a href="http://man7.org/linux/man-pages/man3/bzero.3.html" title="`bzero`, `explicit_bzero` - zero a byte string">[11]</a> from OpenBSD &amp; FreeBSD, <code>SecureZeroMemory</code> <a href="https://msdn.microsoft.com/en-us/library/windows/desktop/aa366877(v=vs.85).aspx" title="`SecureZeroMemory` function">[12]</a> from Windows).</li>
+<li>Using a library function (e.g. <code>memzero_explicit</code> <a href="https://www.kernel.org/doc/htmldocs/kernel-api/API-memzero-explicit.html" title="`memzero_explicit`">[13]</a><a href="https://elixir.bootlin.com/linux/v4.18.5/source/lib/string.c#L706" title="`memzero_explicit` (implementation)">[9]</a> from the Linux Kernel, <code>OPENSSL_cleanse</code> <a href="https://www.openssl.org/docs/man1.1.1/man3/OPENSSL_cleanse.html" title="`OPENSSL_cleanse`">[14]</a><a href="https://github.com/openssl/openssl/blob/master/crypto/mem_clr.c" title="`OPENSSL_cleanse` (implementation)">[6]</a>).</li>
+</ul>
+<p>Regardless of how it is done, none of these ways is — at the same time — portable, easy to recognize the intent (and/or <code>grep</code> for it), readily available and avoiding compiler implementation details. The topic may generate discussions in major projects on which is the best way to proceed and whether an specific approach ensures that the memory is actually cleansed (e.g. <a href="https://github.com/openssl/openssl/pull/455" title="Reimplement non-asm `OPENSSL_cleanse()` #455">[15]</a><a href="http://www.daemonology.net/blog/2014-09-04-how-to-zero-a-buffer.html" title="How to zero a buffer">[16]</a><a href="https://news.ycombinator.com/item?id=8270136" title="Hacker News: How to zero a buffer (daemonology.net)">[17]</a><a href="https://stackoverflow.com/questions/13299420/" title="Mac OS X equivalent of `SecureZeroMemory` / `RtlSecureZeroMemory`?">[18]</a><a href="https://gcc.gnu.org/ml/gcc-help/2014-10/msg00047.html" title="Optimising away `memset()` calls?">[19]</a>). Sometimes, such a way is not effective for a particular compiler (e.g. <a href="https://bugs.llvm.org/show_bug.cgi?id=15495" title="Bug 15495 - dead store pass ignores memory clobbering asm statement">[20]</a>). In the worst case, bugs happen (e.g. <a href="https://bugzilla.kernel.org/show_bug.cgi?id=82041" title="Bug 82041 - `memset` optimized out in `random.c`">[21]</a><a href="https://lkml.org/lkml/2014/8/25/497" title="[PATCH] random: add and use memzero_explicit() for clearing data">[22]</a>).</p>
+<p>C11 (and C++17 as it was based on it) added <code>memset_s</code> (K.3.7.4.1) to give a standard solution to this problem <a href="http://www.open-std.org/jtc1/sc22/wg14/www/docs/n1381.pdf" title="N1381 --- #5 `memset_s()` to clear memory, without fear of removal">[4]</a><a href="http://www.open-std.org/jtc1/sc22/wg14/www/docs/n1548.pdf" title="N1548 --- C11 draft">[23]</a><a href="https://en.cppreference.com/w/c/string/byte/memset" title="`memset`, `memset_s`">[24]</a>. However, it is an optional extension (Annex K) and, at the time of writing, several major compiler vendors do not define <code>__STDC_LIB_EXT1__</code> (GCC <a href="https://godbolt.org/g/M7MyRg" title="Test for `memset_s` in gcc 8.2 at Godbolt">[25]</a>, Clang <a href="https://godbolt.org/g/ZwbkgY" title="Test for `memset_s` in clang 6.0.0 at Godbolt">[26]</a>, MSVC <a href="https://godbolt.org/g/FtrVJ8" title="Test for `memset_s` in MSVC 19 2017 at Godbolt">[27]</a>, icc <a href="https://godbolt.org/g/vHZNrW" title="Test for `memset_s` in icc 18.0.0 at Godbolt">[28]</a>). Therefore, in practical terms, there is no standard solution yet for C nor C++. A 2015 paper on this topic, WG14’s N1967 “Field Experience With Annex K — Bounds Checking Interfaces” <a href="http://www.open-std.org/jtc1/sc22/wg14/www/docs/n1967.htm" title="N1967 (WG14) --- Field Experience With Annex K - Bounds Checking Interfaces">[29]</a>, concludes that Annex K should be removed from the C standard.</p>
+<p>Moreover, while ensuring that the memory is cleared as soon as possible is a good practise, there are other potential improvements when handling sensitive data in memory:</p>
+<ul>
+<li>Reducing the number of copies to a minimum.</li>
+<li>Locking/pinning memory to avoid the data being swapped out to external storage (e.g. disk).</li>
+<li>Encrypting the memory while it is not being accessed to avoid plain-text leaks (e.g. to a log or in a core dump).</li>
+<li>Turning off speculative execution (or mitigating it). At the time of writing, Spectre-class vulnerabilities are still being fixed (either in software or in hardware), and new ones are coming up <a href="https://www.youtube.com/watch?v=_f7O3IfIR2k" title="CppCon 2018: Chandler Carruth “Spectre: Secrets, Side-Channels, Sandboxes, and Security”">[30]</a>.</li>
+</ul>
+<p>Most of these extra improvements, however, require either non-portable code or compiler support; which makes them a good target for standardization.</p>
+<p>Other languages offer similar facilities. For instance, see the <code>SecureString</code> class in .NET <a href="https://docs.microsoft.com/en-us/dotnet/api/system.security.securestring" title="`SecureString` Class">[31]</a>.</p>
+<h2>A solution</h2>
+<p>We can provide a simple <code>secure_clear</code> function that takes a pointer and a size to replace the <code>memset</code> but won’t be optimized away (with some extra notes explained later on):</p>
+<pre><code>std::secure_clear(password, size);
+</code></pre>
+<p>And also a <code>secure_clear</code> function template that takes any <code>T&amp;</code> and clears it entirely:</p>
+<pre><code>std::secure_clear(password);
+</code></pre>
+<p>These solve the basic problem described above. However, we may go further: we can take advantage of move semantics to define an easy-to-use <code>secure_val</code> class template which securely handles sensitive values and can be passed around, if needed; but never copied. The class takes care of setting up the right storage for the sensitive data (e.g. locked memory) and clearing it on move and destruction. On top of that, it provides a single-point of access to such data (which may be used to provide extra guarantees, e.g. memory encryption or using special storage).</p>
+<p>With this proposal, the aforementioned code could be re-written as:</p>
+<pre><code>void f()
+{
+    constexpr std::size_t size = 100;
+    std::secure_val&lt;char [size]&gt; password;
+
+    password.access([](auto &amp; data) {
+        getPasswordFromUser(data, size);
+    });
+
+    // ...
+    
+    password.access([](const auto &amp; data) {
+        usePassword(data, size);
+    });
+}
+</code></pre>
+<p>With this relatively simple change the user has:</p>
+<ul>
+<li>Made clear that such value is sensitive.</li>
+<li>Made clear the points where such data is accessed.</li>
+<li>Ensured the data is securely erased.</li>
+<li>Ensured the data won’t be copied.</li>
+<li>If the implementor provides additional protections, minimized the risk of leaking the plain-text data (e.g. into a log, a core dump, an external agent, etc.).</li>
+</ul>
+<p>Note that making the class template as easy-to-use as possible and hard-to-misuse is critical due to the nature of the code. On this matter, move semantics help a great deal, because they enable us to disallow copying while providing the user with a way to safely move around the data. It also allows the user to write simple code like:</p>
+<pre><code>const auto password = getPasswordFromUser();
+usePassword(std::move(password));
+</code></pre>
+<h2>Proposal</h2>
+<p>This proposal suggests adding a new header, <code>&lt;secure&gt;</code>, containing a <code>secure_clear</code> function, a <code>secure_clear</code> function template and a <code>secure_val</code> class template.</p>
+<h3><code>secure_clear</code> function</h3>
+<pre><code>namespace std {
+    void secure_clear(void* data, size_t size) noexcept;
+}
+</code></pre>
+<p>The <code>secure_clear</code> function is intended to make the contents of the memory range <code>[data, data+size)</code> impossible to recover. It can be considered equivalent to a call to <code>memset(data, value, size)</code> (with an unspecified <code>value</code>). However, the compiler must guarantee the call is never optimized out unless the data was not in memory to begin with.</p>
+<ul>
+<li>To clarify: the call may be removed by the compiler if there is no actual memory involved, instead of forcing itself to use actual memory and then clearing it (which would make the call pointless and less secure to begin with). For instance, if the compiler chose to keep the data in a register because it is small enough (and its address was not taken apart from the call to <code>secure_clear</code>), then the call could be elided. In a way, there was no memory to clear, so it could be considered that it was not optimized out.</li>
+</ul>
+<p>In addition, the compiler may provide further guarantees, like clearing other known copies of the data (e.g. in registers or cache).</p>
+<h3><code>secure_clear</code> function template</h3>
+<pre><code>namespace std {
+    template &lt;typename T&gt;
+    void secure_clear(T&amp; object) noexcept;
+}
+</code></pre>
+<p>The <code>secure_clear</code> function template is equivalent to a call to <code>secure_clear(addressof(object), sizeof(object))</code>.</p>
+<h3><code>secure_val</code> class template</h3>
+<pre><code>namespace std {
+    template &lt;typename T&gt;
+    class secure_val
+    {
+        T value_; // exposition only
+        static_assert(is_trivial_v&lt;T&gt;); // exposition only
+
+    public:
+        secure_val() noexcept;
+
+        secure_val(const secure_val&lt;T&gt;&amp;) = delete;
+        secure_val(secure_val&lt;T&gt;&amp;&amp;) noexcept;
+
+        ~secure_val();
+
+        secure_val&lt;T&gt;&amp; operator=(const secure_val&lt;T&gt;&amp;) = delete;
+        secure_val&lt;T&gt;&amp; operator=(secure_val&lt;T&gt;&amp;&amp;) noexcept;
+
+        void clear() noexcept;
+
+        template &lt;typename F&gt;
+        void access(F f) noexcept(noexcept(f(std::declval&lt;T&amp;&gt;())));
+
+        template &lt;typename F&gt;
+        void access(F f) const noexcept(noexcept(f(std::declval&lt;const T&amp;&gt;())));
+
+        void swap(secure_val&lt;T&gt;&amp;) noexcept;
+    }
+
+    template &lt;typename T&gt;
+    void swap(secure_val&lt;T&gt;&amp;, secure_val&lt;T&gt;&amp;) noexcept;
+}
+</code></pre>
+<p>The <code>secure_val</code> class template is intended to represent a value which will hold sensitive data (e.g. passwords). In particular, it will provide — at the very least — the following behaviour:</p>
+<ul>
+<li>Securely clears on destruction (as if <code>secure_clear</code> was called on the data — assuming memory is being used as storage).</li>
+<li>Securely clears on move (as if <code>secure_clear</code> was called on the moved-from data — assuming memory is being used as storage).</li>
+<li>Securely clears on demand with member function <code>clear</code> (as if <code>secure_clear</code> was called on the data — assuming memory is being used as storage).</li>
+</ul>
+<p>The compiler/implementor may provide further guarantees, like:</p>
+<ul>
+<li>Locking/pinning the memory to avoid being swapped out to external storage (e.g. disk).</li>
+<li>Encrypting the data in memory and only providing a decrypted temporary copy during the <code>access</code> invokation (and encrypting back only in the non-<code>const</code> version).
+<ul>
+<li>Even better, providing encryption “on-the-fly”, i.e. encrypting/decrypting the smallest amount of data possible (e.g. in the extreme, <code>char</code>-by-<code>char</code>); although it would require compiler support or a wrapper to the passed <code>T&amp;</code> value.</li>
+</ul>
+</li>
+<li>Avoiding memory to begin with, e.g. by:
+<ul>
+<li>Keeping the data in registers instead of main memory.</li>
+<li>Using special “storage” to keep the data in (e.g. special memory in a given system, a secure enclave, etc.).</li>
+</ul>
+</li>
+<li>Disable speculative execution or mitigate potential Spectre-class vulnerabilities during the <code>access</code> invokation.</li>
+</ul>
+<p>Requirements:</p>
+<ul>
+<li><code>T</code> must be a <code>TrivialType</code>. This is intended to allow the compiler to treat the data as a simple memory block which can be easily managed, copied, encrypted, etc. and in order to provide any further guarantees.</li>
+<li><code>F</code> (template parameter of the <code>access</code> member templates) must be <code>Callable</code> with a single parameter <code>T&amp;</code> (for the non-<code>const</code> version) and <code>const T&amp;</code> (for the <code>const</code> version).</li>
+</ul>
+<h2>Possible misusages</h2>
+<p>A particular concern is that developers may try to create types like <code>secure_val&lt;string&gt;</code> (i.e. where the actual data is not protected). While it is hard to prevent all misusage, at least the particular case of <code>secure_val&lt;string&gt;</code> (and similar third-party <code>string</code>-like classes) is not allowed since <code>string</code> is not a <code>TrivialType</code>.</p>
+<h2>Alternatives</h2>
+<p>Removing <code>secure_clear</code> from this proposal (i.e. only providing <code>secure_val</code>).</p>
+<ul>
+<li>The function is provided so that developers have portable and standard access to the most basic primitive required to clear memory securely.</li>
+<li>It may be also useful to implement the <code>secure_val</code> class template itself.</li>
+</ul>
+<p>Instead of providing <code>secure_clear</code>, this proposal could make <code>memset_s</code> from C11 to be required in the C++ standard instead.</p>
+<p>Removing <code>secure_val</code> from this proposal (i.e. only providing <code>secure_clear</code>).</p>
+<ul>
+<li>As long as developers have access to the <code>secure_clear</code> primitive, they can implement other solutions or write <code>secure_val</code> themselves. However, providing it with the standard library could make its use more widespread.</li>
+<li>Compiler writers may be able to provide more guarantees with <code>secure_val</code>.</li>
+</ul>
+<h2>Possible extensions</h2>
+<p>It may be worth it to separate <code>access</code> into <code>read_access</code> and <code>write_access</code> (or <code>const_access</code> and <code>access</code>).</p>
+<p>Other related functionality could be proposed under the same header in the future:</p>
+<ul>
+<li>A dynamically-sized string <code>secure_string</code> could be considered useful.</li>
+<li>A way to read non-echoed standard input could be added, like a <code>get_password</code> function taking a <code>secure_val&lt;char [N]&gt;</code> by reference (see, for instance, the <code>getpass</code> module in Python <a href="https://docs.python.org/3.7/library/getpass.html" title="Portable password input">[32]</a>).</li>
+</ul>
+<h2>Naming</h2>
+<p>Several alternatives were considered for the prefix of <code>secure_clear</code> and <code>secure_val</code> as well as the name of the header:</p>
+<ul>
+<li><code>explicit</code>: follows <code>explicit_bzero</code> from OpenBSD &amp; FreeBSD <a href="http://man7.org/linux/man-pages/man3/bzero.3.html" title="`bzero`, `explicit_bzero` - zero a byte string">[11]</a>. It collides with <code>explicit</code> (the keyword). It does not make for a good header name nor a good class template name. Only <code>explicit_clear</code> is a good choice.</li>
+<li><code>sensitive</code>: follows a common word used in this context. <code>sensitive_val</code> is a very clear name. However, <code>sensitive_clear</code> does not look like an optimal choice.</li>
+<li><code>secure</code>: follows <code>SecureZeroMemory</code> from Windows <a href="https://msdn.microsoft.com/en-us/library/windows/desktop/aa366877(v=vs.85).aspx" title="`SecureZeroMemory` function">[12]</a>. It is a good compromise and makes the purpose reasonably clear, for both the class template and the function. It may also allow the header to be more general (i.e. used to other security-related definitions).</li>
+</ul>
+<p>Several alternatives were considered for the second part of the name of the <code>secure_clear</code> function:</p>
+<ul>
+<li><code>zero</code>: follows <code>explicit_bzero</code> from OpenBSD &amp; FreeBSD <a href="http://man7.org/linux/man-pages/man3/bzero.3.html" title="`bzero`, `explicit_bzero` - zero a byte string">[11]</a> and <code>SecureZeroMemory</code> from Windows <a href="https://msdn.microsoft.com/en-us/library/windows/desktop/aa366877(v=vs.85).aspx" title="`SecureZeroMemory` function">[12]</a>. Unambiguous, but the fact that the memory is cleared using the <code>0</code> value could be thought as an implementation detail.</li>
+<li><code>set</code>: follows <code>memset_s</code> from C11. The name seems to suggest that a value is required (i.e. the value to overwrite memory with), which should not matter.</li>
+<li><code>clear</code>: follows some C++ standard library member function (e.g. like those of the containers). It is more general: a verb commonly used with memory to refer to its deletion.</li>
+</ul>
+<p>Several alternatives were considered for the second part of the name of the <code>secure_val</code> class template. See the <code>unique_val</code> proposal for a discussion on it <a href="https://ojeda.io/cpp/unique_val" title="`unique_val`: a default-on-move type">[33]</a>.</p>
+<h2>Example implementation</h2>
+<p>A trivial example implementation (i.e. without further compiler guarantees nor memory encryption) can be found at <a href="https://github.com/ojeda/secure_val/tree/master/proposal" title="`secure_val` Example implementation">[34]</a>.</p>
+<h2>Acknowledgements</h2>
+<h2>References</h2>
+<ol>
+<li>MSC06-C. Beware of compiler optimizations — <a href="https://wiki.sei.cmu.edu/confluence/display/c/MSC06-C.+Beware+of+compiler+optimizations" title="MSC06-C. Beware of compiler optimizations"><em>https://wiki.sei.cmu.edu/confluence/display/c/MSC06-C.+Beware+of+compiler+optimizations</em></a></li>
+<li>CWE-14: Compiler Removal of Code to Clear Buffers — <a href="https://cwe.mitre.org/data/definitions/14.html" title="CWE-14: Compiler Removal of Code to Clear Buffers"><em>https://cwe.mitre.org/data/definitions/14.html</em></a></li>
+<li>V597. The compiler could delete the <code>memset</code> function call (…) — <a href="https://www.viva64.com/en/w/v597/" title="V597. The compiler could delete the `memset` function call (...)"><em>https://www.viva64.com/en/w/v597/</em></a></li>
+<li>N1381 — #5 <code>memset_s()</code> to clear memory, without fear of removal — <a href="http://www.open-std.org/jtc1/sc22/wg14/www/docs/n1381.pdf" title="N1381 --- #5 `memset_s()` to clear memory, without fear of removal"><em>http://www.open-std.org/jtc1/sc22/wg14/www/docs/n1381.pdf</em></a></li>
+<li><code>openssl/crypto/ec/curve448/utils.c</code> (old code) — <a href="https://github.com/openssl/openssl/blob/f8385b0fc0215b378b61891582b0579659d0b9f4/crypto/ec/curve448/utils.c" title="`openssl/crypto/ec/curve448/utils.c` (old code)"><em>https://github.com/openssl/openssl/blob/f8385b0fc0215b378b61891582b0579659d0b9f4/crypto/ec/curve448/utils.c</em></a></li>
+<li><code>OPENSSL_cleanse</code> (implementation) — <a href="https://github.com/openssl/openssl/blob/master/crypto/mem_clr.c" title="`OPENSSL_cleanse` (implementation)"><em>https://github.com/openssl/openssl/blob/master/crypto/mem_clr.c</em></a></li>
+<li><code>openssl/crypto/mem.c</code> (old code) — <a href="https://github.com/openssl/openssl/blob/104ce8a9f02d250dd43c255eb7b8747e81b29422/crypto/mem.c#L143" title="`openssl/crypto/mem.c` (old code)"><em>https://github.com/openssl/openssl/blob/104ce8a9f02d250dd43c255eb7b8747e81b29422/crypto/mem.c#L143</em></a></li>
+<li><code>openssl/crypto/sparccpuid.S</code> (example of assembly implementation) — <a href="https://github.com/openssl/openssl/blob/master/crypto/sparccpuid.S#L363" title="`openssl/crypto/sparccpuid.S` (example of assembly implementation)"><em>https://github.com/openssl/openssl/blob/master/crypto/sparccpuid.S#L363</em></a></li>
+<li><code>memzero_explicit</code> (implementation) — <a href="https://elixir.bootlin.com/linux/v4.18.5/source/lib/string.c#L706" title="`memzero_explicit` (implementation)"><em>https://elixir.bootlin.com/linux/v4.18.5/source/lib/string.c#L706</em></a></li>
+<li>Options Controlling C Dialect — <a href="https://gcc.gnu.org/onlinedocs/gcc/C-Dialect-Options.html" title="Options Controlling C Dialect"><em>https://gcc.gnu.org/onlinedocs/gcc/C-Dialect-Options.html</em></a></li>
+<li><code>bzero</code>, <code>explicit_bzero</code> - zero a byte string — <a href="http://man7.org/linux/man-pages/man3/bzero.3.html" title="`bzero`, `explicit_bzero` - zero a byte string"><em>http://man7.org/linux/man-pages/man3/bzero.3.html</em></a></li>
+<li><code>SecureZeroMemory</code> function — <a href="https://msdn.microsoft.com/en-us/library/windows/desktop/aa366877(v=vs.85).aspx" title="`SecureZeroMemory` function"><em>https://msdn.microsoft.com/en-us/library/windows/desktop/aa366877(v=vs.85).aspx</em></a></li>
+<li><code>memzero_explicit</code> — <a href="https://www.kernel.org/doc/htmldocs/kernel-api/API-memzero-explicit.html" title="`memzero_explicit`"><em>https://www.kernel.org/doc/htmldocs/kernel-api/API-memzero-explicit.html</em></a></li>
+<li><code>OPENSSL_cleanse</code> — <a href="https://www.openssl.org/docs/man1.1.1/man3/OPENSSL_cleanse.html" title="`OPENSSL_cleanse`"><em>https://www.openssl.org/docs/man1.1.1/man3/OPENSSL_cleanse.html</em></a></li>
+<li>Reimplement non-asm <code>OPENSSL_cleanse()</code> #455 — <a href="https://github.com/openssl/openssl/pull/455" title="Reimplement non-asm `OPENSSL_cleanse()` #455"><em>https://github.com/openssl/openssl/pull/455</em></a></li>
+<li>How to zero a buffer — <a href="http://www.daemonology.net/blog/2014-09-04-how-to-zero-a-buffer.html" title="How to zero a buffer"><em>http://www.daemonology.net/blog/2014-09-04-how-to-zero-a-buffer.html</em></a></li>
+<li>Hacker News: How to zero a buffer (daemonology.net) — <a href="https://news.ycombinator.com/item?id=8270136" title="Hacker News: How to zero a buffer (daemonology.net)"><em>https://news.ycombinator.com/item?id=8270136</em></a></li>
+<li>Mac OS X equivalent of <code>SecureZeroMemory</code> / <code>RtlSecureZeroMemory</code>? — <a href="https://stackoverflow.com/questions/13299420/" title="Mac OS X equivalent of `SecureZeroMemory` / `RtlSecureZeroMemory`?"><em>https://stackoverflow.com/questions/13299420/</em></a></li>
+<li>Optimising away <code>memset()</code> calls? — <a href="https://gcc.gnu.org/ml/gcc-help/2014-10/msg00047.html" title="Optimising away `memset()` calls?"><em>https://gcc.gnu.org/ml/gcc-help/2014-10/msg00047.html</em></a></li>
+<li>Bug 15495 - dead store pass ignores memory clobbering asm statement — <a href="https://bugs.llvm.org/show_bug.cgi?id=15495" title="Bug 15495 - dead store pass ignores memory clobbering asm statement"><em>https://bugs.llvm.org/show_bug.cgi?id=15495</em></a></li>
+<li>Bug 82041 - <code>memset</code> optimized out in <code>random.c</code> — <a href="https://bugzilla.kernel.org/show_bug.cgi?id=82041" title="Bug 82041 - `memset` optimized out in `random.c`"><em>https://bugzilla.kernel.org/show_bug.cgi?id=82041</em></a></li>
+<li>[PATCH] random: add and use memzero_explicit() for clearing data — <a href="https://lkml.org/lkml/2014/8/25/497" title="[PATCH] random: add and use memzero_explicit() for clearing data"><em>https://lkml.org/lkml/2014/8/25/497</em></a></li>
+<li>N1548 — C11 draft — <a href="http://www.open-std.org/jtc1/sc22/wg14/www/docs/n1548.pdf" title="N1548 --- C11 draft"><em>http://www.open-std.org/jtc1/sc22/wg14/www/docs/n1548.pdf</em></a></li>
+<li><code>memset</code>, <code>memset_s</code> — <a href="https://en.cppreference.com/w/c/string/byte/memset" title="`memset`, `memset_s`"><em>https://en.cppreference.com/w/c/string/byte/memset</em></a></li>
+<li>Test for <code>memset_s</code> in gcc 8.2 at Godbolt — <a href="https://godbolt.org/g/M7MyRg" title="Test for `memset_s` in gcc 8.2 at Godbolt"><em>https://godbolt.org/g/M7MyRg</em></a></li>
+<li>Test for <code>memset_s</code> in clang 6.0.0 at Godbolt — <a href="https://godbolt.org/g/ZwbkgY" title="Test for `memset_s` in clang 6.0.0 at Godbolt"><em>https://godbolt.org/g/ZwbkgY</em></a></li>
+<li>Test for <code>memset_s</code> in MSVC 19 2017 at Godbolt — <a href="https://godbolt.org/g/FtrVJ8" title="Test for `memset_s` in MSVC 19 2017 at Godbolt"><em>https://godbolt.org/g/FtrVJ8</em></a></li>
+<li>Test for <code>memset_s</code> in icc 18.0.0 at Godbolt — <a href="https://godbolt.org/g/vHZNrW" title="Test for `memset_s` in icc 18.0.0 at Godbolt"><em>https://godbolt.org/g/vHZNrW</em></a></li>
+<li>N1967 (WG14) — Field Experience With Annex K - Bounds Checking Interfaces — <a href="http://www.open-std.org/jtc1/sc22/wg14/www/docs/n1967.htm" title="N1967 (WG14) --- Field Experience With Annex K - Bounds Checking Interfaces"><em>http://www.open-std.org/jtc1/sc22/wg14/www/docs/n1967.htm</em></a></li>
+<li>CppCon 2018: Chandler Carruth “Spectre: Secrets, Side-Channels, Sandboxes, and Security” — <a href="https://www.youtube.com/watch?v=_f7O3IfIR2k" title="CppCon 2018: Chandler Carruth “Spectre: Secrets, Side-Channels, Sandboxes, and Security”"><em>https://www.youtube.com/watch?v=_f7O3IfIR2k</em></a></li>
+<li><code>SecureString</code> Class — <a href="https://docs.microsoft.com/en-us/dotnet/api/system.security.securestring" title="`SecureString` Class"><em>https://docs.microsoft.com/en-us/dotnet/api/system.security.securestring</em></a></li>
+<li>Portable password input — <a href="https://docs.python.org/3.7/library/getpass.html" title="Portable password input"><em>https://docs.python.org/3.7/library/getpass.html</em></a></li>
+<li><code>unique_val</code>: a default-on-move type — <a href="https://ojeda.io/cpp/unique_val" title="`unique_val`: a default-on-move type"><em>https://ojeda.io/cpp/unique_val</em></a></li>
+<li><code>secure_val</code> Example implementation — <a href="https://github.com/ojeda/secure_val/tree/master/proposal" title="`secure_val` Example implementation"><em>https://github.com/ojeda/secure_val/tree/master/proposal</em></a></li>
+</ol>
+
+        </div>
+    </div>
+</div>
+<script src="https://cdn.rawgit.com/google/code-prettify/master/loader/run_prettify.js"></script>
+<script>
+var allCodeBlocks = document.getElementsByTagName("pre");
+for (var i = 0; i < allCodeBlocks.length; ++i)
+    allCodeBlocks[i].innerHTML = PR.prettyPrintOne(allCodeBlocks[i].innerHTML, "cpp");
+</script>
+</body>
+</html>
