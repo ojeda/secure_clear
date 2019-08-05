@@ -2,16 +2,16 @@
 [[attr][description][Sensitive data, like passwords or keying data, should be cleared from memory as soon as they are not needed. This requires ensuring the compiler will not optimize the memory overwrite away. This proposal adds a new header, `<secure>`, containing a `secure_clear` function and a `secure_clear` function template that guarantee users that a memory area is cleared.]]
 [[attr][url][http://wg21.link/P1315]]
 [[attr][paper][P1315]]
-[[attr][revision][R2]]
+[[attr][revision][R3]]
 
 
 # `secure_clear`
 
 Document number: [[print][{paper}]][[print][{revision}]] [[latest]](https://wg21.link/[[print][{paper}]])\
-Date: 2019-06-17\
+Date: 2019-08-05\
 Author: Miguel Ojeda \<[miguel@ojeda.io](mailto:miguel@ojeda.io)\>\
 Project: ISO JTC1/SC22/WG21: Programming Language C++\
-Audience: EWG
+Audience: SG1
 
 
 ## Abstract
@@ -70,7 +70,7 @@ Other languages offer similar facilities in their standard libraries or as exter
 
 ## The basic solution
 
-We can standarize current practise by providing a `secure_clear` function that takes a pointer and a size, which clears the memory (with an unspecified value) and guarantees that it won't be optimized away:
+We can standarize current practise by providing a `secure_clear` function that takes a pointer and a size, which clears the memory (with indeterminate values) and guarantees that it won't be optimized away:
 
     std::secure_clear(password, size);
 
@@ -85,7 +85,7 @@ Since `secure_clear` (the plain function) would be very useful for C projects, w
 Note that the intention here is not to discuss Annex K in its entirety (e.g. to make it mandatory). Instead, we want to focus on a specific need that projects have (securely clearing sensitive data from memory) and that is being used nowadays, as explained in the previous sections. In what form this should be done within C remains to be discussed.
 
 For instance, a solution would be to just make `memset_s` mandatory. However:
-  * This implies specifying a particular value instead of leaving memory with indeterminate values, i.e. it looks like it is intended to ***set new*** values rather than ***disposing old*** data. This point in particular was polled at Kona 2019 [[ref][P1315Kona2019]] and we were in favor of going for the latter interpretation.
+  * This implies specifying a particular value instead of leaving memory with indeterminate values, i.e. it looks like it is intended to ***set new*** values rather than ***disposing of old*** data. This point in particular was polled at Kona 2019 [[ref][P1315Kona2019]] and we were in favor of going for the latter interpretation.
   * A different name for the function may also be key to emphasize the intended semantics.
   * `memset_s`' interface/signature follows Annex K patterns, which may be objected to.
 
@@ -125,15 +125,15 @@ This proposal adds a new header, `<secure>`, containing a `secure_clear` functio
         void secure_clear(void* data, size_t size) noexcept;
     }
 
-The `secure_clear` function is intended to make the contents of the memory range `[data, data + size)` impossible to recover. It can be considered equivalent to a call to `memset(data, value, size)` with an unspecified `value` (i.e. there may even be different values, e.g. randomized). However, the compiler must guarantee the call is never optimized out unless the data was not in memory to begin with.
+The `secure_clear` function is intended to make the contents of the memory range `[data, data + size)` impossible to recover. It can be considered equivalent to a call to `memset(data, value, size)` with indeterminate `value`s (i.e. there may even be different values, e.g. randomized). However, the compiler must guarantee the call is never optimized out unless the data was not in memory to begin with.
   * To clarify: the call may be removed by the compiler if there is no actual memory involved, instead of forcing itself to use actual memory and then clearing it (which would make the call pointless and less secure to begin with). For instance, if the compiler chose to keep the data in a register because it is small enough (and its address was not taken anywhere else), then the call could be elided. In a way, there was no memory to clear to begin with, so it could be considered that it was not optimized out.
-  * Note: at Kona 2019 [[ref][P1315Kona2019]] it was polled whether the compiler should be free to implement further guarantees (e.g. clearing cache/registers containing it) and/or whether we should encourage them to do so. The result was neutral, so further input from EWG compiler experts would be needed to clarify this.
+  * Note: at Kona 2019 [[ref][P1315Kona2019]] it was polled whether the compiler should be free to implement further guarantees (e.g. clearing cache/registers containing it) and/or whether we should encourage them to do so. The result was neutral, so further input from experts would be needed to decide this.
 
 An approach for the wording would be to lift the provision in [intro.abstract]p1 (i.e. the "as-if" rule) for calls to this function; thus conforming implementations need to emulate the behavior of the abstract machine and therefore produce code equivalent to having called the function, even if it has no effect on the observable behavior of the program. This is the same approach C11 takes for `memset_s`:
 
 > Unlike `memset`, any call to the `memset_s` function shall be evaluated strictly according to the rules of the abstract machine as described in (5.1.2.3). That is, any call to the `memset_s` function shall assume that the memory indicated by `s` and `n` may be accessible in the future and thus must contain the values indicated by `c`.
 
-Given this function imposes unusual restrictions/behavior, this paper was forwarded to EWG at Kona 2019 [[ref][P1315Kona2019]].
+Given this function imposes unusual restrictions/behavior, this paper was forwarded to EWG at Kona 2019 [[ref][P1315Kona2019]], and then to SG1 at Cologne 2019 [[ref][P1315Cologne2019]].
 
 
 ### `secure_clear` function template
@@ -174,7 +174,7 @@ A trivial example implementation (i.e. relying on OS-specific functions) can be 
 
 ## Acknowledgements
 
-Thanks to JF Bastien and Billy O'Neal for providing guidance about the standardization process. Thanks to Ryan McDougall for presenting the paper at Kona 2019. Thanks to Graham Markall for his input regarding the SECURE project and the current state on compiler support for related features. Thanks to Martin Sebor for pointing out the SECURE project. Thanks to everyone else that joined the LEWGI discussions.
+Thanks to JF Bastien and Billy O'Neal for providing guidance about the standardization process. Thanks to Ryan McDougall for presenting the paper at Kona 2019. Thanks to Graham Markall for his input regarding the SECURE project and the current state on compiler support for related features. Thanks to Martin Sebor for pointing out the SECURE project. Thanks to everyone else that joined all the different discussions.
 
 
 ## References
@@ -188,7 +188,8 @@ Thanks to JF Bastien and Billy O'Neal for providing guidance about the standardi
 [memset_s-paper]: http://www.open-std.org/jtc1/sc22/wg14/www/docs/n1381.pdf "N1381 --- #5 `memset_s()` to clear memory, without fear of removal"
 [memset_s-cppreference]: https://en.cppreference.com/w/c/string/byte/memset "`memset`, `memset_s`"
 [P1315R1]: http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2018/p1315r1.html "P1315R1 `secure_val`: a secure-clear-on-move type"
-[P1315Kona2019]: http://wiki.edg.com/bin/view/Wg21kona2019/P1315 "P1315R1 `secure_val`: a secure-clear-on-move type (Kona 2019 page)"
+[P1315Kona2019]: http://wiki.edg.com/bin/view/Wg21kona2019/P1315 "P1315R1 minutes at Kona 2019"
+[P1315Cologne2019]: http://wiki.edg.com/bin/view/Wg21cologne2019/P1315 "P1315R2 minutes at Cologne 2019"
 [example-implementation]: https://github.com/ojeda/secure_clear/tree/master/example-implementation "`secure_clear` Example implementation"
 [SecureZeroMemory]: https://msdn.microsoft.com/en-us/library/windows/desktop/aa366877(v=vs.85).aspx "`SecureZeroMemory` function"
 [explicit_bzero]: http://man7.org/linux/man-pages/man3/bzero.3.html "`bzero`, `explicit_bzero` - zero a byte string"
