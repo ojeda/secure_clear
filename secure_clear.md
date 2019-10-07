@@ -2,13 +2,13 @@
 [[attr][description][Sensitive data, like passwords or keying data, should be cleared from memory as soon as they are not needed. This requires ensuring the compiler will not optimize the memory overwrite away. This proposal adds a new header, `<secure>`, containing a `secure_clear` function and a `secure_clear` function template that guarantee users that a memory area is cleared.]]
 [[attr][url][http://wg21.link/P1315]]
 [[attr][paper][P1315]]
-[[attr][revision][R3]]
+[[attr][revision][R4]]
 
 
 # `secure_clear`
 
 Document number: [[print][{paper}]][[print][{revision}]] [[latest]](https://wg21.link/[[print][{paper}]])\
-Date: 2019-08-05\
+Date: 2019-10-07\
 Author: Miguel Ojeda \<[miguel@ojeda.io](mailto:miguel@ojeda.io)\>\
 Project: ISO JTC1/SC22/WG21: Programming Language C++\
 Audience: SG1
@@ -122,7 +122,7 @@ This proposal adds a new header, `<secure>`, containing a `secure_clear` functio
 ### `secure_clear` function
 
     namespace std {
-        void secure_clear(void* data, size_t size) noexcept;
+        void secure_clear(void * data, size_t size) noexcept;
     }
 
 The `secure_clear` function is intended to make the contents of the memory range `[data, data + size)` impossible to recover. It can be considered equivalent to a call to `memset(data, value, size)` with indeterminate `value`s (i.e. there may even be different values, e.g. randomized). However, the compiler must guarantee the call is never optimized out unless the data was not in memory to begin with.
@@ -135,15 +135,24 @@ An approach for the wording would be to lift the provision in [intro.abstract]p1
 
 Given this function imposes unusual restrictions/behavior, this paper was forwarded to EWG at Kona 2019 [[ref][P1315Kona2019]], and then to SG1 at Cologne 2019 [[ref][P1315Cologne2019]].
 
-
 ### `secure_clear` function template
 
     namespace std {
-        template <TriviallyCopyable T>
-        void secure_clear(T& object) noexcept;
+        template <trivially_copyable T>
+            requires (not pointer<T>)
+        void secure_clear(T & object) noexcept;
     }
 
 The `secure_clear` function template is equivalent to a call to `secure_clear(addressof(object), sizeof(object))`.
+
+The `not pointer<T>` constraint is intended to prevent unintended calls that would have cleared a pointer rather than the object it points to:
+
+    char buf[100];
+    char * buf2 = buf;
+
+    std::secure_clear(buf);                // OK, clears the array
+    std::secure_clear(buf2);               // Error
+    std::secure_clear(buf2, sizeof(buf2)); // OK, explicit
 
 
 ## Naming
@@ -174,7 +183,7 @@ A trivial example implementation (i.e. relying on OS-specific functions) can be 
 
 ## Acknowledgements
 
-Thanks to JF Bastien and Billy O'Neal for providing guidance about the standardization process. Thanks to Ryan McDougall for presenting the paper at Kona 2019. Thanks to Graham Markall for his input regarding the SECURE project and the current state on compiler support for related features. Thanks to Martin Sebor for pointing out the SECURE project. Thanks to everyone else that joined all the different discussions.
+Thanks to JF Bastien and Billy O'Neal for providing guidance about the standardization process. Thanks to Ryan McDougall for presenting the paper at Kona 2019. Thanks to Graham Markall for his input regarding the SECURE project and the current state on compiler support for related features. Thanks to Martin Sebor for pointing out the SECURE project. Thanks to BSI for suggesting constraining the template to non-pointers. Thanks to everyone else that joined all the different discussions.
 
 
 ## References
