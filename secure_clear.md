@@ -1,17 +1,19 @@
 [[attr][title][secure_clear]]
-[[attr][description][Sensitive data, like passwords or keying data, should be cleared from memory as soon as they are not needed. This requires ensuring the compiler will not optimize the memory overwrite away. This proposal adds a new header, `<secure>`, containing a `secure_clear` function and a `secure_clear` function template that guarantee users that a memory area is cleared.]]
-[[attr][url][http://wg21.link/P1315]]
-[[attr][paper][P1315]]
-[[attr][revision][R4]]
-
+[[attr][description][Sensitive data, like passwords or keying data, should be cleared from memory as soon as they are not needed. This requires ensuring the compiler will not optimize the memory overwrite away. This proposal adds a `secure_clear` function (C) and a `secure_clear` function template (C++) that guarantee users that a memory area is cleared.]]
+[[attr][url][http://www.open-std.org/jtc1/sc22/wg14/www/docs/n2505.html]]
+[[attr][paper][N2505]]
+[[attr][c++-url][http://wg21.link/P1315]]
+[[attr][c++-paper][P1315]]
+[[attr][c++-revision][R5]]
 
 # `secure_clear`
 
-Document number: [[print][{paper}]][[print][{revision}]] [[latest]](https://wg21.link/[[print][{paper}]])\
-Date: 2019-10-07\
+C Document number: [[print][{paper}]] \
+C++ Document number: [[print][{c++-paper}]][[print][{c++-revision}]] [[latest]]([[print][{c++-url}]])\
+Date: 2020-03-28\
 Author: Miguel Ojeda \<[miguel@ojeda.io](mailto:miguel@ojeda.io)\>\
-Project: ISO JTC1/SC22/WG21: Programming Language C++\
-Audience: SG1
+Project: ISO JTC1/SC22/WG14: Programming Language C\
+Project: ISO JTC1/SC22/WG21: Programming Language C++
 
 
 ## Abstract
@@ -23,9 +25,9 @@ Audience: SG1
 
 When manipulating sensitive data, like passwords in memory or keying data, there is a need for library and application developers to clear the memory after the data is not needed anymore [[ref][MSC06]][[ref][CWE-14]][[ref][V597]][[ref][memset_s-paper]], in order to minimize the time window where it is possible to capture it (e.g. ending in a core dump or probed by a malicious actor). Recent vulnerabilities (e.g. Meltdown, Spectre-class, Rowhammer-class...) have made this requirement even more prominent.
 
-In order to ensure that the memory is cleared, the developer needs to inform the compiler that it must not optimize away the memory write, even if it can prove it has no observable behavior. In particular, for C++, extra care is needed to consider all exceptional return paths.
+In order to ensure that the memory is cleared, the developer needs to inform the compiler that it must not optimize away the memory write, even if it can prove it has no observable behavior. For C++, extra care is needed to consider all exceptional return paths.
 
-For instance, the following function may be vulnerable, since the compiler may optimize the `memset` call away because the `password` buffer is not read from before it goes out of scope:
+For instance, the following C++ function may be vulnerable, since the compiler may optimize the `memset` call away because the `password` buffer is not read from before it goes out of scope:
 
     void f()
     {
@@ -70,22 +72,18 @@ Other languages offer similar facilities in their standard libraries or as exter
 
 ## The basic solution
 
-We can standarize current practise by providing a `secure_clear` function that takes a pointer and a size, which clears the memory (with indeterminate values) and guarantees that it won't be optimized away:
+We can standarize current practise by providing a C `secure_clear` function that takes a pointer and a size, which clears the memory (with indeterminate values) and guarantees that it won't be optimized away:
 
-    std::secure_clear(password, size);
+    secure_clear(password, size);
 
-As well as a `secure_clear` function template that takes a reference to a `TriviallyCopyable` object and clears it entirely:
+As well as a `secure_clear` function template for C++ that takes a reference to a non-pointer `trivially_copyable` object and clears it entirely:
 
     std::secure_clear(password);
 
-### Note on C (WG14)
+Note that the intention here is not to discuss Annex K in its entirety (e.g. to make it mandatory). Instead, we want to focus on a specific need that projects have right now (clearing sensitive data from memory), as explained in the previous sections.
 
-Since `secure_clear` (the plain function) would be very useful for C projects, we would like to work with WG14 (see Kona 2019 polls [[ref][P1315Kona2019]]) on getting it into C too and therefore importing it into C++. From there, we would define the function template on C++'s side.
-
-Note that the intention here is not to discuss Annex K in its entirety (e.g. to make it mandatory). Instead, we want to focus on a specific need that projects have (securely clearing sensitive data from memory) and that is being used nowadays, as explained in the previous sections. In what form this should be done within C remains to be discussed.
-
-For instance, a solution would be to just make `memset_s` mandatory. However:
-  * This implies specifying a particular value instead of leaving memory with indeterminate values, i.e. it looks like it is intended to ***set new*** values rather than ***disposing of old*** data. This point in particular was polled at Kona 2019 [[ref][P1315Kona2019]] and we were in favor of going for the latter interpretation.
+An alternative solution would be to just make `memset_s` mandatory. However:
+  * This implies specifying a particular value instead of leaving memory with indeterminate values, i.e. it looks like it is intended to ***set new*** values rather than ***disposing of old*** data. This point was polled at WG21 Kona 2019 [[ref][P1315Kona2019]] and the result was to go for the latter (if the function were to be added to C++).
   * A different name for the function may also be key to emphasize the intended semantics.
   * `memset_s`' interface/signature follows Annex K patterns, which may be objected to.
 
@@ -104,48 +102,49 @@ Most of these extra improvements require either non-portable code, operating-sys
   * The SECURE project and GCC (stack erasure implemented as a function attribute) [[ref][SECURE-GCC-1]][[ref][SECURE-GCC-2]][[ref][SECURE-GCC-3]].
   * Research on controlling side-effects in mainstream C compilers [[ref][whatyouc]].
 
-Further, discussing the addition of security-related features to the C++ language is rare. Therefore, this paper attempts to only spearhead the work on this area, providing access to users to the well-known "guaranteed memory clearing" function already used in the industry as explained in the previous sections.
+Further, discussing the addition of security-related features to the C and C++ languages is rare. Therefore, this paper attempts to only spearhead the work on this area, providing access to users to the well-known "guaranteed memory clearing" function already used in the industry as explained in the previous sections.
 
-Some other related improvements based on the basic building blocks can be also thought of, too:
-  * For instance, earlier revisions of this paper [[ref][P1315R1]] proposed, in addition, an uncopyable class template meant to wrap a memory area on which `secure_clear` is called on destruction/move, plus some other features (explicit read/modify/write access, locking/pinning, encryption-at-rest, etc.). This wrapper is a good approach to ensure memory is cleared even when dealing with exceptions. During the LEWGI review, it was acknowledged that similar types are in use by third-parties. Some libraries and languages feature similar types. It was decided at Kona 2019 [[ref][P1315Kona2019]] to reduce the scope of the paper and only provide the basic building block, `secure_clear`.
-  * A type-modifier with similar semantics as the wrapper class template above was suggested during the LEWGI review.
+Some other related C++ improvements based on the basic building blocks can be also thought of, too:
+  * For instance, earlier revisions of the C++ paper [[ref][P1315R1]] proposed, in addition, an uncopyable class template meant to wrap a memory area on which `secure_clear` is called on destruction/move, plus some other features (explicit read/modify/write access, locking/pinning, encryption-at-rest, etc.). This wrapper is a good approach to ensure memory is cleared even when dealing with exceptions. During the WG21 LEWGI review, it was acknowledged that similar types are in use by third-parties. Some libraries and languages feature similar types. It was decided at WG21 Kona 2019 [[ref][P1315Kona2019]] to reduce the scope of the paper and only provide the basic building block, `secure_clear`.
+  * A type-modifier with similar semantics as the wrapper class template above was suggested during the WG21 LEWGI review.
   * Dynamically-sized string-like types (e.g. `secure_string`) may be considered useful (e.g. for passwords).
 
-As well as other related library features:
+There are, as well, other related library features:
   * A way to read non-echoed standard input (e.g. see the `getpass` module in Python [[ref][Python-getpass]]).
 
 
 ## Proposal
 
-This proposal adds a new header, `<secure>`, containing a `secure_clear` function and a `secure_clear` function template.
+This proposal adds a `secure_clear` function (C) and a `secure_clear` function template (C++).
 
 ### `secure_clear` function
 
-    namespace std {
-        void secure_clear(void * data, size_t size) noexcept;
-    }
+    void secure_clear(void * data, size_t size);
 
 The `secure_clear` function is intended to make the contents of the memory range `[data, data + size)` impossible to recover. It can be considered equivalent to a call to `memset(data, value, size)` with indeterminate `value`s (i.e. there may even be different values, e.g. randomized). However, the compiler must guarantee the call is never optimized out unless the data was not in memory to begin with.
   * To clarify: the call may be removed by the compiler if there is no actual memory involved, instead of forcing itself to use actual memory and then clearing it (which would make the call pointless and less secure to begin with). For instance, if the compiler chose to keep the data in a register because it is small enough (and its address was not taken anywhere else), then the call could be elided. In a way, there was no memory to clear to begin with, so it could be considered that it was not optimized out.
-  * Note: at Kona 2019 [[ref][P1315Kona2019]] it was polled whether the compiler should be free to implement further guarantees (e.g. clearing cache/registers containing it) and/or whether we should encourage them to do so. The result was neutral, so further input from experts would be needed to decide this.
+  * Note: at WG21 Kona 2019 [[ref][P1315Kona2019]] it was polled whether the compiler should be free to implement further guarantees (e.g. clearing cache/registers containing it) and/or whether we should encourage them to do so. The result was neutral, so further input from experts from both WG14 and WG21 would be needed to decide this.
 
-An approach for the wording would be to lift the provision in [intro.abstract]p1 (i.e. the "as-if" rule) for calls to this function; thus conforming implementations need to emulate the behavior of the abstract machine and therefore produce code equivalent to having called the function, even if it has no effect on the observable behavior of the program. This is the same approach C11 takes for `memset_s`:
+An approach for the wording would be to use the one for `memset_s`:
 
 > Unlike `memset`, any call to the `memset_s` function shall be evaluated strictly according to the rules of the abstract machine as described in (5.1.2.3). That is, any call to the `memset_s` function shall assume that the memory indicated by `s` and `n` may be accessible in the future and thus must contain the values indicated by `c`.
 
-Given this function imposes unusual restrictions/behavior, this paper was forwarded to EWG at Kona 2019 [[ref][P1315Kona2019]], and then to SG1 at Cologne 2019 [[ref][P1315Cologne2019]].
+In the case of C++ (assuming the function is not imported from C), a possible approach would be to lift the provision in [intro.abstract]p1 (i.e. the "as-if" rule) for calls to this function; thus conforming implementations need to emulate the behavior of the abstract machine and therefore produce code equivalent to having called the function, even if it has no effect on the observable behavior of the program.
+
+Given this function imposes unusual restrictions/behavior, this paper was forwarded to WG21 EWG at Kona 2019 [[ref][P1315Kona2019]], and then to WG21 SG1 at Cologne 2019 [[ref][P1315Cologne2019]].
 
 ### `secure_clear` function template
 
     namespace std {
-        template <trivially_copyable T>
-            requires (not pointer<T>)
+        template <class T>
+            requires is_trivially_copyable_v<T>
+                and (not is_pointer_v<T>)
         void secure_clear(T & object) noexcept;
     }
 
 The `secure_clear` function template is equivalent to a call to `secure_clear(addressof(object), sizeof(object))`.
 
-The `not pointer<T>` constraint is intended to prevent unintended calls that would have cleared a pointer rather than the object it points to:
+The `not is_pointer_v<T>` constraint is intended to prevent unintended calls that would have cleared a pointer rather than the object it points to:
 
     char buf[100];
     char * buf2 = buf;
@@ -154,12 +153,12 @@ The `not pointer<T>` constraint is intended to prevent unintended calls that wou
     std::secure_clear(buf2);               // Error
     std::secure_clear(buf2, sizeof(buf2)); // OK, explicit
 
-
 ## Naming
 
-Several alternatives were considered for the initial name of the proposed `secure_clear` function and function template, as well as the `secure` header name. Some were also suggested during the LEWGI review.
+Several alternatives were considered for the initial name of the proposed `secure_clear` function and function template. Some were also suggested during the WG21 LEWGI review.
 
 In general, there are many possible terms that may be used to form a name:
+  * `mem` and variations
   * `secure`
   * `clear`
   * `explicit`
@@ -169,7 +168,6 @@ In general, there are many possible terms that may be used to form a name:
   * `smash`
   * `erase`
   * `set`
-  * `mem` and variations
   * `sensitive`
   * ...
 
@@ -183,7 +181,7 @@ A trivial example implementation (i.e. relying on OS-specific functions) can be 
 
 ## Acknowledgements
 
-Thanks to JF Bastien and Billy O'Neal for providing guidance about the standardization process. Thanks to Ryan McDougall for presenting the paper at Kona 2019. Thanks to Graham Markall for his input regarding the SECURE project and the current state on compiler support for related features. Thanks to Martin Sebor for pointing out the SECURE project. Thanks to BSI for suggesting constraining the template to non-pointers. Thanks to everyone else that joined all the different discussions.
+Thanks to Aaron Ballman, JF Bastien and Billy O'Neal for providing guidance about the WG14 and WG21 standardization processes. Thanks to Ryan McDougall for presenting the paper at WG21 Kona 2019. Thanks to Graham Markall for his input regarding the SECURE project and the current state on compiler support for related features. Thanks to Martin Sebor for pointing out the SECURE project. Thanks to BSI for suggesting constraining the template to non-pointers. Thanks to everyone else that joined all the different discussions.
 
 
 ## References

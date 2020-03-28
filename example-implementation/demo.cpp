@@ -1,31 +1,31 @@
 // SPDX-License-Identifier: MIT
 //
-// Trivial example implementation of P1315 `secure_clear` (demo)
+// Trivial example implementation of N2505/P1315 `secure_clear`
 //
 // This is not a test suite. It is just a simple demonstration of
-// the difference std::secure_clear() makes with respect to something
-// like std::memset().
+// the difference `secure_clear()` makes with respect to something
+// like `memset()` when optimizations are enabled.
 //
-// Compile using flags like -std=c++17 -O2 -S (gcc, clang, icc), /FA (msvc)
-// or use a tool like the Compiler Explorer (https://godbolt.org/).
+// To try it out, compare the output code generated for `test_secure_clear()`
+// and `test_memset()`. Take also a look at `test_template()`.
 //
-// Then compare the output code generated for test_secure_clear()
-// and test_memset(), as well as taking a look at test_template().
+// An easy option to visualize it is to use a tool like Compiler Explorer
+// (https://godbolt.org/).
 //
-// Copyright (c) 2019 Miguel Ojeda <miguel@ojeda.io>
+// Copyright (c) 2019-2020 Miguel Ojeda <miguel@ojeda.io>
 
-#include "secure"
+#include "secure_clear" // secure_clear
 
-#include <cstring>
+#include <cstring> // memset
 
-void getPasswordFromUser(char *, std::size_t) noexcept;
-void usePassword(char *, std::size_t) noexcept;
+void getPasswordFromUser(char *, std::size_t);
+void usePassword(char *, std::size_t);
 
 namespace {
 
     // Similar to the example in the paper
     template <bool useSecureClear>
-    void f() noexcept
+    void f()
     {
         constexpr std::size_t size = 100;
         char password[size];
@@ -45,17 +45,17 @@ namespace {
 
 } // namespace
 
-void test_secure_clear() noexcept
+void test_secure_clear()
 {
     f<true>();
 }
 
-void test_memset() noexcept
+void test_memset()
 {
     f<false>();
 }
 
-void test_template() noexcept
+void test_template()
 {
     struct MyType {
         int a;
@@ -69,6 +69,13 @@ void test_template() noexcept
         ~MyComplexType() {}
     } myComplexObject;
 
-    // std::secure_clear(myComplexObject); // should fail
+    // std::secure_clear(myComplexObject); // Error
+
+    char buf[100];
+    char * buf2 = buf;
+
+    std::secure_clear(buf);                // OK, clears the array
+    // std::secure_clear(buf2);            // Error
+    std::secure_clear(buf2, sizeof(buf2)); // OK, explicit
 }
 

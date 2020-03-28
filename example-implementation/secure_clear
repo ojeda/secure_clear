@@ -1,0 +1,30 @@
+// SPDX-License-Identifier: MIT
+//
+// Trivial example implementation of N2505/P1315 `secure_clear`
+//
+// It just forwards the call to OS-specific functions. See the paper for
+// references to actual implementations used in production in several
+// major projects.
+//
+// Copyright (c) 2019-2020 Miguel Ojeda <miguel@ojeda.io>
+
+#pragma once
+
+#include <memory> // addressof
+#include <type_traits> // is_trivially_copyable_v, is_pointer_v
+
+#include "secure_clear.h"
+
+namespace std
+{
+    using ::secure_clear;
+
+    template <class T>
+        requires is_trivially_copyable_v<T>
+            and (not is_pointer_v<T>)
+    void secure_clear(T & object) noexcept
+    {
+        secure_clear(addressof(object), sizeof(object));
+    }
+}
+
