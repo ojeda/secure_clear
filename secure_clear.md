@@ -1,6 +1,6 @@
 [[attr][title][secure_clear]]
 [[attr][description][Sensitive data, like passwords or keying data, should be cleared from memory as soon as they are not needed. This requires ensuring the compiler will not optimize the memory overwrite away. This proposal adds a `secure_clear` function (C) and a `secure_clear` function template (C++) that guarantee users that a memory area is cleared.]]
-[[attr][url][http://www.open-std.org/jtc1/sc22/wg14/www/docs/n2505.html]]
+[[attr][url][http://www.open-std.org/jtc1/sc22/wg14/www/docs/n2505.htm]]
 [[attr][paper][N2505]]
 [[attr][c++-url][http://wg21.link/P1315]]
 [[attr][c++-paper][P1315]]
@@ -10,7 +10,7 @@
 
 C Document number: [[print][{paper}]] \
 C++ Document number: [[print][{c++-paper}]][[print][{c++-revision}]] [[latest]]([[print][{c++-url}]])\
-Date: 2020-03-28\
+Date: 2020-04-15\
 Author: Miguel Ojeda \<[miguel@ojeda.io](mailto:miguel@ojeda.io)\>\
 Project: ISO JTC1/SC22/WG14: Programming Language C\
 Project: ISO JTC1/SC22/WG21: Programming Language C++
@@ -19,6 +19,15 @@ Project: ISO JTC1/SC22/WG21: Programming Language C++
 ## Abstract
 
 [[print][{description}]]
+
+
+## Changelog
+
+**P1315R5** -- Merged WG14 C and WG21 C++ proposals. Same content as N2505. With respect to R4:
+  - The function `secure_clear` is now imported from C, so proposal changed accordingly (e.g. removed `noexcept`).
+  - Updated template declaration to require a constraint on `is_trivially_copyable_v` instead of using the `TriviallyCopyable` pseudo-concept (since it does not exist in C++20 on its own). Also changed `pointer` to `is_pointer_v`.
+  - Moved the `memset_s` wording suggestion into the C side.
+  - Removed new header suggestion until discussed with WG14.
 
 
 ## The problem
