@@ -1,15 +1,15 @@
-[[attr][title][secure_clear (update to N2599)]]
+[[attr][title][secure_clear]]
 [[attr][description][Sensitive data, like passwords or keying data, should be cleared from memory as soon as they are not needed. This requires ensuring the compiler will not optimize the memory overwrite away. This proposal adds a `memset_explicit` function (C) and a `memset_explicit` function template (C++) that guarantee users that a memory area is cleared.]]
-[[attr][url][http://www.open-std.org/jtc1/sc22/wg14/www/docs/n2631.htm]]
-[[attr][paper][N2631]]
+[[attr][url][http://www.open-std.org/jtc1/sc22/wg14/www/docs/n2682.htm]]
+[[attr][paper][N2682]]
 [[attr][c++-url][http://wg21.link/P1315]]
-[[attr][c++-paper][P1315R6]]
+[[attr][c++-paper][P1315R7]]
 
-# `secure_clear` (update to N2599)
+# `secure_clear`
 
 C Document number: [[print][{paper}]] \
 C++ Document number: [[print][{c++-paper}]] [[latest]]([[print][{c++-url}]])\
-Date: 2020-12-18\
+Date: 2021-03-10\
 Author: Miguel Ojeda \<[ojeda@ojeda.dev](mailto:ojeda@ojeda.dev)\>\
 Project: ISO JTC1/SC22/WG14: Programming Language C\
 Project: ISO JTC1/SC22/WG21: Programming Language C++
@@ -22,12 +22,156 @@ Project: ISO JTC1/SC22/WG21: Programming Language C++
 
 ## Changelog
 
-**N2631 & P1315R6** -- Update to N2599:
-  - Removed the other two design alternatives not chosen by the committee.
+### N2682 & P1315R7
+
+  - Removed the two wording alternatives not chosen by the committee.
+  - Removed the Recommended Practice section from Alternative 1 (performance) as polled.
+  - Added implementation-defined semantics alternative as agreed (Alternative 2).
+  - Added a variation of both main alternatives (1b and 2b) with details on copies.
+  - Added `0` as second argument to the C++ function template to match the current C interface.
+  - Added section on all past polls (both C and C++).
+  - Added past changelogs.
+
+### N2631 & P1315R6
+  - Removed the two design alternatives not chosen by the committee.
   - Added three wording alternatives.
   - Changed "may" to "might" in order to follow the new ISO guidelines.
   - Simplified introduction, modified references and other minor changes.
 
+### N2505 & P1315R5
+  - Merged WG14 C and WG21 C++ proposals.
+  - The function `secure_clear` is now imported from C; proposal changed accordingly (e.g. removed `noexcept`).
+  - Updated template declaration to require a constraint on `is_trivially_copyable_v` instead of using the `trivially_copyable` pseudo-concept (since it does not exist in C++20 on its own); and changed `pointer` to `is_pointer_v`.
+  - Moved the `memset_s` wording suggestion into the C side.
+  - Removed new header suggestion until discussed with WG14.
+
+### P1315R4
+  - Constrained the template function to non-pointers, with an added explanation and example.
+  - Changed spelling of the `TriviallyCopyable` pseudo-concept to `trivially_copyable` following the change in the rest of the standard for all other concepts.
+
+### P1315R3
+  - Changed to indeterminate values instead of unspecified ones.
+
+### P1315R2
+  - Removed `secure_val` class template as polled and changed paper title to `secure_clear` to reflect that.
+  - Added suggestion on wording: lift the "as-if" rule for calls to `secure_clear`, similar to C11's `memset_s` wording.
+  - Added intention of working with WG14.
+  - Split "The problem" section into several.
+
+### P1315R1
+  - Split `access` member function into `read_access`, `write_access` and `modify_access`.
+  - Added mention to the SECURE project.
+
+## Past polls
+
+### WG14 March 2021
+
+Does the committee wish to replace the `c` parameter with a specific value from `memset_explicit` in N2631?
+
+     Y  N  A
+     4  8 11 => Does not pass.
+
+Does the committee wish to replace the `c` parameter with "implementation-defined values" from `memset_explicit` in N2631?
+
+     Y  N  A
+     4  9  8 => Does not pass.
+
+Does the committee prefer Alternatives 1, 2, or 3 as is in N2631?
+
+    A1 A2 A3
+    13  4  0 => Alternative 1 wins.
+
+Does the committee prefer removing the Recommended Practice section from Alternative 1 in N2631?
+
+     Y  N  A
+    15  0  7 => Passes.
+
+Does the committee prefer adding `memset_explicit` to the exception list in `<string.h>` freestanding implementations?
+
+    Y  N  A
+    3  8 10 => Does not pass.
+
+### WG14/WG21 Liaison March 2021
+
+Should P1315 `memset_explicit` use Alternative 1 plus a statement that the semantics be implementation-defined as a statement of intent rather than an effect on the abstract machine?
+
+         SF  F  N  A SA
+    WG21  5  5  0  0  1 => Consensus.
+    WG14  2  2  0  0  0 => Consensus.
+
+### WG14 November 2020
+
+Does the committee wish to adopt something along the lines of alternative 3 of N2599 into C23?
+
+     Y  N  A
+    16  1  6 => Clear direction.
+
+### WG14 August 2020
+
+Would the Committee like to see a non-elidable, non-optional memory-erasing function added to C2x?
+
+     Y  N  A
+    14  0  2 => Clear direction.
+
+Would the Committee like the non-elidable, non-optional memory-erasing function not to specify a value in its interface?
+
+     Y  N  A
+     6  5  6 => Unclear direction.
+
+Would the Committee like to be able to specify a value in the interface to the non-elidable, non-optional memory-erasing function?
+
+     Y  N  A
+     7  4  6 => Clearer direction.
+
+Would the Committee like to have both no-value and value-specifying interfaces to the non-elidable, non-optional function available?
+
+     Y  N  A
+     5  6  7 => Unclear direction.
+
+### WG21 SG1 November 2019
+
+We don't see a specific SG1 concern for what we presume is a single-threaded API. If this paper intends to make `secure_clear` resilient to UB in C++ then data-race UB is but one of the kinds.
+
+    No objection to unanimous consent.
+
+### WG21 EWGI July 2019
+
+Spend committee time on this versus other proposals, given that time is limited?
+
+    SF  F  N  A SA
+     2  9  2  1  0 => Consensus.
+
+Send the paper to SG1 for input on abstract machine integration and wording (similar to `volatile_load`/`volatile_store`). Send it back to us after.
+
+    SF  F  N  A SA
+     4  5  4  0  0 => Consensus.
+
+### WG21 EWGI February 2019
+
+Remove all cache related things from the proposal.
+
+    SF  F  N  A SA
+     3  1  3  0  0 => Consensus.
+
+Remove encrypting at rest from the proposal.
+
+    SF  F  N  A SA
+     4  1  1  1  0 => Consensus.
+
+Want `secure_clear` to write indeterminate values (as opposed to `memset_s`).
+
+    SF  F  N  A SA
+     4  1  2  0  0 => Consensus.
+
+Want to work with WG14 on `secure_clear` (e.g. salvage `memset_s` from Annex K).
+
+    SF  F  N  A SA
+     2  3  2  0  0 => Consensus.
+
+We want something along the lines of `secure_val` (with compiler support).
+
+    SF  F  N  A SA
+     0  0  2  2  3 => Consensus to reject.
 
 ## The problem
 
@@ -118,11 +262,15 @@ There are, as well, other related library features that some languages provide f
 
 ## Proposal (C)
 
-This proposal adds the `memset_explicit` function which follows the `memset` interface, semantics and naming; proposing three main wording alternatives.
+This proposal adds the `memset_explicit` function which follows the `memset` interface, semantics and naming.
+
+Two main wording alternatives are proposed (1 and 2). Alternative 1 is the same as in N2631. Alternative 2 converts the semantics into implementation-defined.
+
+Each main alternative has a variation (1b and 2b) that adds extra details on the potential clearing and avoidance of copies by implementations.
 
 The proposed wordings are with respect to N2596 C2x Working Draft.
 
-### Alternative 1: Intent only
+### Alternative 1: Intent semantics
 
 After "7.24.6.1 The `memset` function", add:
 
@@ -139,9 +287,34 @@ After "7.24.6.1 The `memset` function", add:
 >
 > (Footnote 1) The intention is that the memory store is always performed (i.e., never elided), regardless of optimizations. This is in contrast to calls to the `memset` function (7.24.6.1).
 >
-> ##### Recommended Practice
+> ##### Returns
 >
-> A call to the `memset_explicit` function should have similar performance to a call to a `memset` function call.
+> The `memset_explicit` function returns the value of `s`.
+
+In "B.23 String handling `<string.h>`", after the `memset` line, add:
+
+    void *memset_explicit(void *s, int c, size_t n);
+
+In "J.6.1 Rule based identifiers", after the `memset` line, add:
+
+    memset_explicit
+
+### Alternative 1b: Intent semantics + details on copies
+
+After "7.24.6.1 The `memset` function", add:
+
+> #### 7.24.6.2 The `memset_explicit` function
+>
+> ##### Synopsis
+>
+>     #include <string.h>
+>     void *memset_explicit(void *s, int c, size_t n);
+>
+> ##### Description
+>
+> The `memset_explicit` function copies the value of `c` (converted to an `unsigned char`) into each of the first `n` characters of the object pointed to by `s`. The purpose of this function is to make sensitive information stored in the object inaccessible. (Footnote 1)
+>
+> (Footnote 1) The intention is that the memory store is always performed (i.e., never elided), regardless of optimizations. This is in contrast to calls to the `memset` function (7.24.6.1). The implementation might clear other copies of the data (e.g., intermediate values, stack frame, cache lines, spilled registers, swapped out pages, etc.) or it might avoid their creation (e.g., reducing copies, locking/pinning pages, etc.).
 >
 > ##### Returns
 >
@@ -155,8 +328,7 @@ In "J.6.1 Rule based identifiers", after the `memset` line, add:
 
     memset_explicit
 
-
-### Alternative 2: Required side effect
+### Alternative 2: Implementation-defined semantics
 
 After "7.24.6.1 The `memset` function", add:
 
@@ -169,13 +341,13 @@ After "7.24.6.1 The `memset` function", add:
 >
 > ##### Description
 >
-> The `memset_explicit` function copies the value of `c` (converted to an `unsigned char`) into each of the first `n` characters of the object pointed to by `s` as a needed side effect (5.1.2.3) (Footnote 1). The purpose of this function is to make sensitive information stored in the object inaccessible.
->
-> (Footnote 1) The intention is that the memory store is always performed (i.e., never elided), regardless of optimizations. This is in contrast to calls to the `memset` function (7.24.6.1). The implementation might not clear other copies of the data (e.g., intermediate values, cache lines, spilled registers, etc.).
+> The semantics of the `memset_explicit` function are implementation-defined.
 >
 > ##### Recommended Practice
 >
-> A call to the `memset_explicit` function should have similar performance to a call to a `memset` function call.
+> Implementations should copy the value of `c` (converted to an `unsigned char`) into each of the first `n` characters of the object pointed to by `s` in order to make sensitive information stored in the object inaccessible. (Footnote 1)
+>
+> (Footnote 1) The intention is that the memory store is always performed (i.e., never elided), regardless of optimizations. This is in contrast to calls to the `memset` function (7.24.6.1).
 >
 > ##### Returns
 >
@@ -189,7 +361,7 @@ In "J.6.1 Rule based identifiers", after the `memset` line, add:
 
     memset_explicit
 
-### Alternative 3: Details on the effects on the abstract machine
+### Alternative 2b: Implementation-defined semantics + details on copies
 
 After "7.24.6.1 The `memset` function", add:
 
@@ -202,17 +374,13 @@ After "7.24.6.1 The `memset` function", add:
 >
 > ##### Description
 >
-> The `memset_explicit` function copies the value of `c` (converted to an `unsigned char`) into each of the first `n` characters of the object pointed to by `s` as a needed side effect (5.1.2.3) (Footnote 1). The purpose of this function is to make sensitive information stored in the object inaccessible.
->
-> (Footnote 1) The intention is that the memory store is always performed (i.e., never elided), regardless of optimizations. This is in contrast to calls to the `memset` function (7.24.6.1). The implementation might not clear other copies of the data (e.g., intermediate values, cache lines, spilled registers, etc.).
->
-> It is implementation-defined what actions in the actual semantics of the execution environment (e.g., system calls) are taken to realize the side effect. The evaluation of an invocation of the function causes these implementation-defined actions to occur. In the abstract machine, the evaluation of the function is considered to not necessarily return to the caller [NOTE 1]. On completing the actions in the actual semantics, the abstract machine continues with the function returning control to its caller.
->
-> **NOTE 1** This means that the actual semantics associated with the function call cannot be affected by undefined behavior from an evaluation sequenced after the call, even if said evaluation would manifestly occur should the function return. The actual semantics may nevertheless be affected by asynchronous actions.
+> The semantics of the `memset_explicit` function are implementation-defined.
 >
 > ##### Recommended Practice
 >
-> A call to the `memset_explicit` function should have similar performance to a call to a `memset` function call.
+> Implementations should copy the value of `c` (converted to an `unsigned char`) into each of the first `n` characters of the object pointed to by `s` in order to make sensitive information stored in the object inaccessible. (Footnote 1)
+>
+> (Footnote 1) The intention is that the memory store is always performed (i.e., never elided), regardless of optimizations. This is in contrast to calls to the `memset` function (7.24.6.1). The implementation might clear other copies of the data (e.g., intermediate values, stack frame, cache lines, spilled registers, swapped out pages, etc.) or it might avoid their creation (e.g., reducing copies, locking/pinning pages, etc.).
 >
 > ##### Returns
 >
@@ -237,7 +405,7 @@ This proposal adds the `memset_explicit` function template which would rely on t
         void memset_explicit(T & object) noexcept;
     }
 
-The `memset_explicit` function template is equivalent to a call to `memset_explicit(addressof(object), sizeof(object))`.
+The `memset_explicit` function template is equivalent to a call to `memset_explicit(addressof(object), 0, sizeof(object))`.
 
 The `not is_pointer_v<T>` constraint is intended to prevent unintended calls that would have cleared a pointer rather than the object it points to:
 
@@ -258,7 +426,7 @@ A trivial example implementation (i.e., relying on OS-specific functions) can be
 
 ## Acknowledgements
 
-Thanks to Aaron Ballman, JF Bastien, David Keaton and Billy O'Neal for providing guidance about the WG14 and WG21 standardization processes. Thanks to Aaron Ballman, Peter Sewell, David Svoboda, Hubert Tong, Martin Uecker and others for their input on wording and the abstract machine. Thanks to Robert C. Seacord for his review and proofreading of a previous revision. Thanks to Ryan McDougall for presenting an early revision at WG21 Kona 2019. Thanks to Graham Markall for his input regarding the SECURE project and the current state of compiler support for related features. Thanks to Martin Sebor for pointing out the SECURE project. Thanks to BSI for suggesting constraining the template to non-pointers. Thanks to Philipp Klaus Krause for raising the discussion in the OpenBSD list. Thanks to everyone else that joined all the different discussions.
+Thanks to Aaron Ballman, JF Bastien, David Keaton and Billy O'Neal for providing guidance about the WG14 and WG21 standardization processes. Thanks to Aaron Ballman, Peter Sewell, David Svoboda, Hubert Tong, Martin Uecker, Ville Voutilainen and others for their input on wording and the abstract machine. Thanks to Aaron Peter Bachmann for withdrawing his parallel proposal [[ref][WG14-N2485-explicit_memset]]. Thanks to Robert C. Seacord for his review and proofreading of a previous revision. Thanks to Ryan McDougall for presenting an early revision at WG21 Kona 2019. Thanks to Graham Markall for his input regarding the SECURE project and the current state of compiler support for related features. Thanks to Martin Sebor for pointing out the SECURE project. Thanks to BSI for suggesting constraining the template to non-pointers. Thanks to Philipp Klaus Krause for raising the discussion in the OpenBSD list. Thanks to everyone else that joined all the different discussions.
 
 
 ## References

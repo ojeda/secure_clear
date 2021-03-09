@@ -1,0 +1,558 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<title>secure_clear</title>
+<meta name="description" content="Sensitive data, like passwords or keying data, should be cleared from memory as soon as they are not needed. This requires ensuring the compiler will not optimize the memory overwrite away. This proposal adds a `memset_explicit` function (C) and a `memset_explicit` function template (C++) that guarantee users that a memory area is cleared.">
+<meta name="author" content="Miguel Ojeda">
+<meta property="og:url" content="http://www.open-std.org/jtc1/sc22/wg14/www/docs/n2682.htm">
+<meta property="og:type" content="website">
+<meta property="og:title" content="secure_clear">
+<meta property="og:description" content="Sensitive data, like passwords or keying data, should be cleared from memory as soon as they are not needed. This requires ensuring the compiler will not optimize the memory overwrite away. This proposal adds a `memset_explicit` function (C) and a `memset_explicit` function template (C++) that guarantee users that a memory area is cleared.">
+<script type="application/ld+json">
+{
+    "@context": "http://schema.org",
+    "@type": "WebSite",
+    "name": "secure_clear",
+    "description": "Sensitive data, like passwords or keying data, should be cleared from memory as soon as they are not needed. This requires ensuring the compiler will not optimize the memory overwrite away. This proposal adds a `memset_explicit` function (C) and a `memset_explicit` function template (C++) that guarantee users that a memory area is cleared.",
+    "url": "http://www.open-std.org/jtc1/sc22/wg14/www/docs/n2682.htm",
+    "author": {
+        "@type": "Person",
+        "name": "Miguel Ojeda",
+        "description": "Software Engineer",
+        "jobTitle": "Software Engineer",
+        "url": "https://ojeda.dev",
+        "email": "mailto:ojeda@ojeda.dev"
+    }
+}
+</script>
+<link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAABRUlEQVQ4y9XSP0iVURgG8N/5Pv9ccNVKbHERdXKqtWitXHKLmi+0iX/g2BB4h0KMyIaWWiNCcHBvcNOGloZaWsQhCAIH0Xvvcfi+C8e4tUbP+JzzPu/D87z8awQxBZRaoX3hJaYSSSt0a6ZAmf1oI/WXrUQrNL+GvxoQ06yYnvUReSSmuxkzj4/Yxztc7dmaxpKYbmbDM3ipc3YLlENNvMEWHuIQn3ClwCS+Yynb1sSRcqDKJXXW8AAf8AWLtZMnPQfP8UtMd8Q0iutYNhTGMEUYxm4WJuzgWoERHOMV7mM12zT+56QrbwUa6GqFPUxgUbu9gYZTl/CN0MXteqhX6z0cFBjLtmxixdPBhBPdzuWqrPAYb7GAObzALOIA3uMzaIXtzN6hotyylkrr4TV+1kE26hZu4Ef/48kxNf87P3jxkP57nAO+hlg6xexR1gAAAABJRU5ErkJggg==">
+<style>
+/*!
+ * Bootstrap Reboot v4.5.3 (https://getbootstrap.com/)
+ * Copyright 2011-2020 The Bootstrap Authors
+ * Copyright 2011-2020 Twitter, Inc.
+ * Licensed under MIT (https://github.com/twbs/bootstrap/blob/main/LICENSE)
+ * Forked from Normalize.css, licensed MIT (https://github.com/necolas/normalize.css/blob/master/LICENSE.md)
+ */*,::after,::before{box-sizing:border-box}html{font-family:sans-serif;line-height:1.15;-webkit-text-size-adjust:100%;-webkit-tap-highlight-color:transparent}article,aside,figcaption,figure,footer,header,hgroup,main,nav,section{display:block}body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif,"Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol","Noto Color Emoji";font-size:1rem;font-weight:400;line-height:1.5;color:#212529;text-align:left;background-color:#fff}[tabindex="-1"]:focus:not(:focus-visible){outline:0!important}hr{box-sizing:content-box;height:0;overflow:visible}h1,h2,h3,h4,h5,h6{margin-top:0;margin-bottom:.5rem}p{margin-top:0;margin-bottom:1rem}abbr[data-original-title],abbr[title]{text-decoration:underline;-webkit-text-decoration:underline dotted;text-decoration:underline dotted;cursor:help;border-bottom:0;-webkit-text-decoration-skip-ink:none;text-decoration-skip-ink:none}address{margin-bottom:1rem;font-style:normal;line-height:inherit}dl,ol,ul{margin-top:0;margin-bottom:1rem}ol ol,ol ul,ul ol,ul ul{margin-bottom:0}dt{font-weight:700}dd{margin-bottom:.5rem;margin-left:0}blockquote{margin:0 0 1rem}b,strong{font-weight:bolder}small{font-size:80%}sub,sup{position:relative;font-size:75%;line-height:0;vertical-align:baseline}sub{bottom:-.25em}sup{top:-.5em}a{color:#007bff;text-decoration:none;background-color:transparent}a:hover{color:#0056b3;text-decoration:underline}a:not([href]):not([class]){color:inherit;text-decoration:none}a:not([href]):not([class]):hover{color:inherit;text-decoration:none}code,kbd,pre,samp{font-family:SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;font-size:1em}pre{margin-top:0;margin-bottom:1rem;overflow:auto;-ms-overflow-style:scrollbar}figure{margin:0 0 1rem}img{vertical-align:middle;border-style:none}svg{overflow:hidden;vertical-align:middle}table{border-collapse:collapse}caption{padding-top:.75rem;padding-bottom:.75rem;color:#6c757d;text-align:left;caption-side:bottom}th{text-align:inherit;text-align:-webkit-match-parent}label{display:inline-block;margin-bottom:.5rem}button{border-radius:0}button:focus{outline:1px dotted;outline:5px auto -webkit-focus-ring-color}button,input,optgroup,select,textarea{margin:0;font-family:inherit;font-size:inherit;line-height:inherit}button,input{overflow:visible}button,select{text-transform:none}[role=button]{cursor:pointer}select{word-wrap:normal}[type=button],[type=reset],[type=submit],button{-webkit-appearance:button}[type=button]:not(:disabled),[type=reset]:not(:disabled),[type=submit]:not(:disabled),button:not(:disabled){cursor:pointer}[type=button]::-moz-focus-inner,[type=reset]::-moz-focus-inner,[type=submit]::-moz-focus-inner,button::-moz-focus-inner{padding:0;border-style:none}input[type=checkbox],input[type=radio]{box-sizing:border-box;padding:0}textarea{overflow:auto;resize:vertical}fieldset{min-width:0;padding:0;margin:0;border:0}legend{display:block;width:100%;max-width:100%;padding:0;margin-bottom:.5rem;font-size:1.5rem;line-height:inherit;color:inherit;white-space:normal}progress{vertical-align:baseline}[type=number]::-webkit-inner-spin-button,[type=number]::-webkit-outer-spin-button{height:auto}[type=search]{outline-offset:-2px;-webkit-appearance:none}[type=search]::-webkit-search-decoration{-webkit-appearance:none}::-webkit-file-upload-button{font:inherit;-webkit-appearance:button}output{display:inline-block}summary{display:list-item;cursor:pointer}template{display:none}[hidden]{display:none!important}
+@media screen and (min-width: 992px) {
+    body {
+        background-color: #515558;
+    }
+
+    .container {
+        background-color: #ffffff;
+        box-shadow: 3px 3px 3px 1px rgba(0, 0, 0, 0.3);
+        max-width: 900px;
+        margin-top: 2.5rem;
+        margin-bottom: 2.5rem;
+        padding-top: 4rem;
+        padding-bottom: 4rem;
+    }
+}
+
+.container {
+    width: 100%;
+    max-width: 900px;
+    padding-right: 165px;
+    padding-left: 165px;
+    margin-right: auto;
+    margin-left: auto;
+    justify-content: center !important;
+}
+
+@media (max-width: 992px) {
+    .container {
+        padding-right: 5%;
+        padding-left: 5%;
+    }
+}
+
+h1, h2, h3 {
+    font-weight: 500;
+    line-height: 1.2;
+    margin-top: 0;
+    margin-bottom: .5rem;
+}
+
+h1 {
+    font-size: 2.3rem;
+    margin-top: 2rem;
+}
+
+h2 {
+    font-size: 2rem;
+}
+
+h3 {
+    font-size: 1.5rem;
+}
+
+code {
+    font-size: 87.5%;
+    color: #e83e8c;
+    word-wrap: break-word;
+}
+
+a > code {
+    color: inherit;
+}
+
+pre code {
+  font-size: inherit;
+  color: inherit;
+  word-break: normal;
+
+  /* iOS/macOS Safari */
+  word-wrap: normal;
+}
+
+pre {
+    background-color: #f5faff;
+    border-radius: 0.4em;
+    border-color: #c5c5c5;
+    border-width: 1px;
+    border-style: solid;
+    padding: 0.7em;
+    display: block;
+    font-size: 87.5%;
+    color: #212529;
+}
+
+blockquote {
+    background-color: #f5faff;
+    border-radius: 0.4em;
+    border-color: #c5c5c5;
+    border-width: 1px;
+    border-style: solid;
+    padding: 0.7em;
+}
+
+blockquote > h5 {
+    font-size: 0.9rem;
+}
+
+ol > li {
+    text-align: start;
+    font-size: .9rem;
+}
+
+p {
+    text-align: justify;
+}
+
+p:last-child {
+    margin-bottom: 0;
+}
+
+a {
+    word-break: break-word;
+}
+
+.hljs-keyword, .hljs-name {
+    color: #0070cc;
+}
+
+.hljs-number {
+    color: #b55600;
+}
+
+.hljs-comment {
+    color: #138600;
+    font-style: italic;
+}
+
+</style>
+</head>
+<body>
+<div class="container">
+<h1><code>secure_clear</code></h1>
+<p>C Document number: N2682 <br />
+C++ Document number: P1315R7 <a href="http://wg21.link/P1315">[latest]</a><br />
+Date: 2021-03-10<br />
+Author: Miguel Ojeda &lt;<a href="mailto:ojeda@ojeda.dev">ojeda@ojeda.dev</a>&gt;<br />
+Project: ISO JTC1/SC22/WG14: Programming Language C<br />
+Project: ISO JTC1/SC22/WG21: Programming Language C++</p>
+<h2>Abstract</h2>
+<p>Sensitive data, like passwords or keying data, should be cleared from memory as soon as they are not needed. This requires ensuring the compiler will not optimize the memory overwrite away. This proposal adds a <code>memset_explicit</code> function (C) and a <code>memset_explicit</code> function template (C++) that guarantee users that a memory area is cleared.</p>
+<h2>Changelog</h2>
+<h3>N2682 &amp; P1315R7</h3>
+<ul>
+<li>Removed the two wording alternatives not chosen by the committee.</li>
+<li>Removed the Recommended Practice section from Alternative 1 (performance) as polled.</li>
+<li>Added implementation-defined semantics alternative as agreed (Alternative 2).</li>
+<li>Added a variation of both main alternatives (1b and 2b) with details on copies.</li>
+<li>Added <code>0</code> as second argument to the C++ function template to match the current C interface.</li>
+<li>Added section on all past polls (both C and C++).</li>
+<li>Added past changelogs.</li>
+</ul>
+<h3>N2631 &amp; P1315R6</h3>
+<ul>
+<li>Removed the two design alternatives not chosen by the committee.</li>
+<li>Added three wording alternatives.</li>
+<li>Changed “may” to “might” in order to follow the new ISO guidelines.</li>
+<li>Simplified introduction, modified references and other minor changes.</li>
+</ul>
+<h3>N2505 &amp; P1315R5</h3>
+<ul>
+<li>Merged WG14 C and WG21 C++ proposals.</li>
+<li>The function <code>secure_clear</code> is now imported from C; proposal changed accordingly (e.g. removed <code>noexcept</code>).</li>
+<li>Updated template declaration to require a constraint on <code>is_trivially_copyable_v</code> instead of using the <code>trivially_copyable</code> pseudo-concept (since it does not exist in C++20 on its own); and changed <code>pointer</code> to <code>is_pointer_v</code>.</li>
+<li>Moved the <code>memset_s</code> wording suggestion into the C side.</li>
+<li>Removed new header suggestion until discussed with WG14.</li>
+</ul>
+<h3>P1315R4</h3>
+<ul>
+<li>Constrained the template function to non-pointers, with an added explanation and example.</li>
+<li>Changed spelling of the <code>TriviallyCopyable</code> pseudo-concept to <code>trivially_copyable</code> following the change in the rest of the standard for all other concepts.</li>
+</ul>
+<h3>P1315R3</h3>
+<ul>
+<li>Changed to indeterminate values instead of unspecified ones.</li>
+</ul>
+<h3>P1315R2</h3>
+<ul>
+<li>Removed <code>secure_val</code> class template as polled and changed paper title to <code>secure_clear</code> to reflect that.</li>
+<li>Added suggestion on wording: lift the “as-if” rule for calls to <code>secure_clear</code>, similar to C11’s <code>memset_s</code> wording.</li>
+<li>Added intention of working with WG14.</li>
+<li>Split “The problem” section into several.</li>
+</ul>
+<h3>P1315R1</h3>
+<ul>
+<li>Split <code>access</code> member function into <code>read_access</code>, <code>write_access</code> and <code>modify_access</code>.</li>
+<li>Added mention to the SECURE project.</li>
+</ul>
+<h2>Past polls</h2>
+<h3>WG14 March 2021</h3>
+<p>Does the committee wish to replace the <code>c</code> parameter with a specific value from <code>memset_explicit</code> in N2631?</p>
+<pre><code> Y  N  A
+ 4  8 11 =&gt; Does not pass.
+</code></pre>
+<p>Does the committee wish to replace the <code>c</code> parameter with “implementation-defined values” from <code>memset_explicit</code> in N2631?</p>
+<pre><code> Y  N  A
+ 4  9  8 =&gt; Does not pass.
+</code></pre>
+<p>Does the committee prefer Alternatives 1, 2, or 3 as is in N2631?</p>
+<pre><code>A1 A2 A3
+13  4  0 =&gt; Alternative 1 wins.
+</code></pre>
+<p>Does the committee prefer removing the Recommended Practice section from Alternative 1 in N2631?</p>
+<pre><code> Y  N  A
+15  0  7 =&gt; Passes.
+</code></pre>
+<p>Does the committee prefer adding <code>memset_explicit</code> to the exception list in <code>&lt;string.h&gt;</code> freestanding implementations?</p>
+<pre><code>Y  N  A
+3  8 10 =&gt; Does not pass.
+</code></pre>
+<h3>WG14/WG21 Liaison March 2021</h3>
+<p>Should P1315 <code>memset_explicit</code> use Alternative 1 plus a statement that the semantics be implementation-defined as a statement of intent rather than an effect on the abstract machine?</p>
+<pre><code>     SF  F  N  A SA
+WG21  5  5  0  0  1 =&gt; Consensus.
+WG14  2  2  0  0  0 =&gt; Consensus.
+</code></pre>
+<h3>WG14 November 2020</h3>
+<p>Does the committee wish to adopt something along the lines of alternative 3 of N2599 into C23?</p>
+<pre><code> Y  N  A
+16  1  6 =&gt; Clear direction.
+</code></pre>
+<h3>WG14 August 2020</h3>
+<p>Would the Committee like to see a non-elidable, non-optional memory-erasing function added to C2x?</p>
+<pre><code> Y  N  A
+14  0  2 =&gt; Clear direction.
+</code></pre>
+<p>Would the Committee like the non-elidable, non-optional memory-erasing function not to specify a value in its interface?</p>
+<pre><code> Y  N  A
+ 6  5  6 =&gt; Unclear direction.
+</code></pre>
+<p>Would the Committee like to be able to specify a value in the interface to the non-elidable, non-optional memory-erasing function?</p>
+<pre><code> Y  N  A
+ 7  4  6 =&gt; Clearer direction.
+</code></pre>
+<p>Would the Committee like to have both no-value and value-specifying interfaces to the non-elidable, non-optional function available?</p>
+<pre><code> Y  N  A
+ 5  6  7 =&gt; Unclear direction.
+</code></pre>
+<h3>WG21 SG1 November 2019</h3>
+<p>We don’t see a specific SG1 concern for what we presume is a single-threaded API. If this paper intends to make <code>secure_clear</code> resilient to UB in C++ then data-race UB is but one of the kinds.</p>
+<pre><code>No objection to unanimous consent.
+</code></pre>
+<h3>WG21 EWGI July 2019</h3>
+<p>Spend committee time on this versus other proposals, given that time is limited?</p>
+<pre><code>SF  F  N  A SA
+ 2  9  2  1  0 =&gt; Consensus.
+</code></pre>
+<p>Send the paper to SG1 for input on abstract machine integration and wording (similar to <code>volatile_load</code>/<code>volatile_store</code>). Send it back to us after.</p>
+<pre><code>SF  F  N  A SA
+ 4  5  4  0  0 =&gt; Consensus.
+</code></pre>
+<h3>WG21 EWGI February 2019</h3>
+<p>Remove all cache related things from the proposal.</p>
+<pre><code>SF  F  N  A SA
+ 3  1  3  0  0 =&gt; Consensus.
+</code></pre>
+<p>Remove encrypting at rest from the proposal.</p>
+<pre><code>SF  F  N  A SA
+ 4  1  1  1  0 =&gt; Consensus.
+</code></pre>
+<p>Want <code>secure_clear</code> to write indeterminate values (as opposed to <code>memset_s</code>).</p>
+<pre><code>SF  F  N  A SA
+ 4  1  2  0  0 =&gt; Consensus.
+</code></pre>
+<p>Want to work with WG14 on <code>secure_clear</code> (e.g. salvage <code>memset_s</code> from Annex K).</p>
+<pre><code>SF  F  N  A SA
+ 2  3  2  0  0 =&gt; Consensus.
+</code></pre>
+<p>We want something along the lines of <code>secure_val</code> (with compiler support).</p>
+<pre><code>SF  F  N  A SA
+ 0  0  2  2  3 =&gt; Consensus to reject.
+</code></pre>
+<h2>The problem</h2>
+<p>When manipulating sensitive data, like passwords in memory or keying data, there is a need for library and application developers to clear the memory after the data is not needed anymore <a href="https://wiki.sei.cmu.edu/confluence/display/c/MSC06-C.+Beware+of+compiler+optimizations" title="SEI CERT C Coding Standard. “MSC06-C. Beware of compiler optimizations”">[1]</a><a href="https://cwe.mitre.org/data/definitions/14.html" title="Common Weakness Enumeration. “CWE-14: Compiler Removal of Code to Clear Buffers”">[2]</a><a href="https://www.viva64.com/en/w/v597/" title="Viva64. “V597. The compiler could delete the `memset` function call (...)”">[3]</a><a href="http://www.open-std.org/jtc1/sc22/wg14/www/docs/n1381.pdf" title="David Svoboda. “WG14 N1381 #5 `memset_s()` to clear memory, without fear of removal”">[4]</a>, in order to minimize the time window where it is possible to capture it (e.g., ending in a core dump or probed by a malicious actor). Recent vulnerabilities (e.g., Meltdown, Spectre-class, Rowhammer-class…) have made this requirement even more prominent.</p>
+<p>To ensure that the memory is cleared, the developer needs to inform the compiler that it must not optimize away the memory write, even if it can prove it has no observable behavior. For C++, extra care is needed to consider all exceptional return paths.</p>
+<p>For instance, the following C function may be vulnerable, since the compiler may optimize the <code>memset</code> call away because the <code>password</code> buffer is not read from before it goes out of scope:</p>
+<pre><code>void f(void)
+{
+    char password[SIZE];
+
+    // Acquire some sensitive data
+    get_password_from_user(password, SIZE);
+
+    // Use it for some operations
+    use_password(password, SIZE);
+
+    // Attempt to clear the sensitive data
+    memset(password, 0, SIZE);
+}
+</code></pre>
+<p>On top of that, in C++, <code>use_password</code> could throw an exception so <code>memset</code> is never called (i.e., assume the stack is not overwritten and/or that the memory is held in the free store).</p>
+<p>There are many ways that developers may use to try to ensure the memory is cleared as expected (i.e., avoiding the optimizer):</p>
+<ul>
+<li>Calling <code>memset_s</code> from Annex K, if available.</li>
+<li>Calling a function defined in another translation unit, assuming LTO/WPO is not enabled.</li>
+<li>Writing memory through a <code>volatile</code> pointer (e.g., <code>decaf_bzero</code> <a href="https://github.com/openssl/openssl/blob/f8385b0fc0215b378b61891582b0579659d0b9f4/crypto/ec/curve448/utils.c" title="OpenSSL. “`openssl/crypto/ec/curve448/utils.c` (old code)”">[5]</a> from OpenSSL).</li>
+<li>Calling <code>memset</code> through a <code>volatile</code> function pointer (e.g., <code>OPENSSL_cleanse</code> C implementation <a href="https://github.com/openssl/openssl/blob/master/crypto/mem_clr.c" title="OpenSSL. “`OPENSSL_cleanse` (implementation)”">[6]</a>).</li>
+<li>Creating a dependency by writing an <code>extern</code> variable into it (e.g., <code>CRYPTO_malloc</code> implementation <a href="https://github.com/openssl/openssl/blob/104ce8a9f02d250dd43c255eb7b8747e81b29422/crypto/mem.c#L143" title="OpenSSL. “`openssl/crypto/mem.c` (old code)”">[7]</a> from OpenSSL).</li>
+<li>Coding the memory write in assembly (e.g., <code>OPENSSL_cleanse</code> SPARC implementation <a href="https://github.com/openssl/openssl/blob/master/crypto/sparccpuid.S#L363" title="OpenSSL. “`openssl/crypto/sparccpuid.S` (example of assembly implementation)”">[8]</a>).</li>
+<li>Introducing a memory barrier (e.g., <code>memzero_explicit</code> implementation <a href="https://elixir.bootlin.com/linux/v4.18.5/source/lib/string.c#L706" title="Linux Kernel. “`memzero_explicit` (implementation)”">[9]</a> from the Linux Kernel).</li>
+<li>Disabling specific compiler options/optimizations (e.g., <code>-fno-builtin-memset</code> <a href="https://gcc.gnu.org/onlinedocs/gcc/C-Dialect-Options.html" title="GCC. “Options Controlling C Dialect”">[10]</a> in GCC).</li>
+</ul>
+<p>Or they may use a pre-existing solution whenever available:</p>
+<ul>
+<li>Using an operating system-provided API (e.g., <code>explicit_bzero</code> <a href="http://man7.org/linux/man-pages/man3/bzero.3.html" title="Linux man-pages. “`bzero`, `explicit_bzero` - zero a byte string”">[11]</a> from OpenBSD &amp; FreeBSD, <code>SecureZeroMemory</code> <a href="https://msdn.microsoft.com/en-us/library/windows/desktop/aa366877(v=vs.85).aspx" title="Microsoft. “`SecureZeroMemory` function”">[12]</a> from Windows).</li>
+<li>Using a library function (e.g., <code>memzero_explicit</code> <a href="https://www.kernel.org/doc/htmldocs/kernel-api/API-memzero-explicit.html" title="Linux Kernel. “`memzero_explicit`”">[13]</a><a href="https://elixir.bootlin.com/linux/v4.18.5/source/lib/string.c#L706" title="Linux Kernel. “`memzero_explicit` (implementation)”">[9]</a> from the Linux Kernel, <code>OPENSSL_cleanse</code> <a href="https://www.openssl.org/docs/man1.1.1/man3/OPENSSL_cleanse.html" title="OpenSSL. “`OPENSSL_cleanse`”">[14]</a><a href="https://github.com/openssl/openssl/blob/master/crypto/mem_clr.c" title="OpenSSL. “`OPENSSL_cleanse` (implementation)”">[6]</a>).</li>
+</ul>
+<p>Regardless of how it is done, none of these ways is — at the same time — portable, easy to recognize the intent (and/or <code>grep</code> for it), readily available and avoiding compiler implementation details. The topic may generate discussions in major projects on which is the best way to proceed and whether an specific approach ensures that the memory is actually cleansed (e.g., <a href="https://github.com/openssl/openssl/pull/455" title="OpenSSL. “Reimplement non-asm `OPENSSL_cleanse()` #455”">[15]</a><a href="http://www.daemonology.net/blog/2014-09-04-how-to-zero-a-buffer.html" title="Colin Percival. “How to zero a buffer”">[16]</a><a href="https://news.ycombinator.com/item?id=8270136" title="Colin Percival et. al.. “How to zero a buffer (daemonology.net)”">[17]</a><a href="https://stackoverflow.com/questions/13299420/" title="Daniel Trebbien et. al.. “Mac OS X equivalent of `SecureZeroMemory` / `RtlSecureZeroMemory`?”">[18]</a><a href="https://gcc.gnu.org/ml/gcc-help/2014-10/msg00047.html" title="Sandy Harris. “Optimising away `memset()` calls?”">[19]</a>). Sometimes, such a way is not effective for a particular compiler (e.g., <a href="https://bugs.llvm.org/show_bug.cgi?id=15495" title="Felix von Leitner. “Bug 15495 - dead store pass ignores memory clobbering asm statement”">[20]</a>). In the worst case, bugs happen (e.g., <a href="https://bugzilla.kernel.org/show_bug.cgi?id=82041" title="zatimend. “Bug 82041 - `memset` optimized out in `random.c`”">[21]</a><a href="https://lore.kernel.org/lkml/1408996899-4892-1-git-send-email-dborkman@redhat.com/" title="Daniel Borkmann. “[PATCH] random: add and use memzero_explicit() for clearing data”">[22]</a>).</p>
+<p>C11 (and C++17 as it was based on it) added <code>memset_s</code> (K.3.7.4.1) to give a standard solution to this problem <a href="http://www.open-std.org/jtc1/sc22/wg14/www/docs/n1381.pdf" title="David Svoboda. “WG14 N1381 #5 `memset_s()` to clear memory, without fear of removal”">[4]</a><a href="http://www.open-std.org/jtc1/sc22/wg14/www/docs/n1548.pdf" title="Larry Jones. “WG14 N1548 Working Draft with diff marks against N1256”">[23]</a>. However, it is an optional extension (Annex K) and, at the time of writing, several major compiler vendors do not define <code>__STDC_LIB_EXT1__</code> (GCC <a href="https://godbolt.org/g/M7MyRg" title="Miguel Ojeda. “Test for `memset_s` in gcc 8.2 at Godbolt”">[24]</a>, Clang <a href="https://godbolt.org/g/ZwbkgY" title="Miguel Ojeda. “Test for `memset_s` in clang 6.0.0 at Godbolt”">[25]</a>, MSVC <a href="https://godbolt.org/g/FtrVJ8" title="Miguel Ojeda. “Test for `memset_s` in MSVC 19 2017 at Godbolt”">[26]</a>, icc <a href="https://godbolt.org/g/vHZNrW" title="Miguel Ojeda. “Test for `memset_s` in icc 18.0.0 at Godbolt”">[27]</a>). Therefore, in practical terms, there is no widely-available, portable solution yet for C nor C++. A 2015 paper on this topic, WG14’s N1967 “Field Experience With Annex K — Bounds Checking Interfaces” <a href="http://www.open-std.org/jtc1/sc22/wg14/www/docs/n1967.htm" title="Carlos O'Donell, Martin Sebor. “WG14 N1967 Field Experience With Annex K - Bounds Checking Interfaces”">[28]</a>, concludes that “Annex K should be removed from the C standard”. On the other hand, a 2019 paper, WG14’s N2336 “Bounds-checking Interfaces: Field Experience and Future Directions” <a href="http://www.open-std.org/jtc1/sc22/wg14/www/docs/n2336.pdf" title="Robert C. Seacord. “WG14 N2336 Bounds-checking Interfaces: Field Experience and Future Directions”">[29]</a>, examines the arguments both for and against the bounds-checked interfaces, evaluates possible solutions for actual problems with Annex K, and propounds the repair and retention of Annex K for C2x.</p>
+<p>Other languages offer similar facilities in their standard libraries or as external projects:</p>
+<ul>
+<li>Limited private types in Ada and SPARK <a href="https://proteancode.com/wp-content/uploads/2017/06/ae2017_final3_for_web.pdf" title="Roderick Chapman. “Sanitizing Sensitive Data: How to get it Right (or at least Less Wrong…)”">[30]</a><a href="https://link.springer.com/chapter/10.1007%2F978-3-319-60588-3_3" title="Roderick Chapman. “Sanitizing Sensitive Data: How to get it Right (or at least Less Wrong…)”">[31]</a>.</li>
+<li>The <code>secrecy</code>, <code>secstr</code> and <code>zeroize</code> libraries in Rust <a href="https://crates.io/crates/secrecy" title="Tony Arcieri. “`secrecy` Rust library”">[32]</a><a href="https://crates.io/crates/secstr" title="Greg V. “`secstr` Rust library”">[33]</a><a href="https://crates.io/crates/zeroize" title="Tony Arcieri. “`zeroize` Rust library”">[34]</a>.</li>
+<li>The <code>SecureString</code> class in .NET Core, .NET Framework and Xamarin <a href="https://docs.microsoft.com/en-us/dotnet/api/system.security.securestring" title="Microsoft. “`SecureString` Class”">[35]</a>.</li>
+<li>The <code>securemem</code> package in Haskell <a href="https://hackage.haskell.org/package/securemem" title="Vincent Hanquez. “`securemem`: abstraction to an auto scrubbing and const time eq, memory chunk.”">[36]</a>.</li>
+</ul>
+<h2>The basic solution</h2>
+<p>We can standardize current practise by providing a <code>memset_explicit</code> function that takes a memory range (a pointer and a size) to be erased, plus a value, guaranteeing that it won’t be optimized away:</p>
+<pre><code>memset_explicit(password, 0, size);
+</code></pre>
+<p>As well as a <code>memset_explicit</code> function template for C++ that takes a reference to a non-pointer <code>trivially_copyable</code> object to scrub it entirely:</p>
+<pre><code>std::memset_explicit(password);
+</code></pre>
+<p>There are several reasonable design alternatives for such a function with respect to its interface, semantics, wording, naming, etc. Both WG14 and WG21 discussed them in several instances on previous revisions of this proposal. In the end, the C committee decided to go for a function with the same interface as <code>memset</code> for simplicity and familiarity.</p>
+<h2>Further issues and improvements</h2>
+<p>While it is a good practise to ensure that the memory is cleared as soon as possible, there are other potential improvements when handling sensitive data in memory:</p>
+<ul>
+<li>Reducing the number of copies to a minimum.</li>
+<li>Clearing registers, caches, the entire stack frame, etc.</li>
+<li>Locking/pinning memory to avoid the data being swapped out to external storage (e.g., disk).</li>
+<li>Encrypting the memory while it is not being accessed to avoid plain-text leaks (e.g., to a log or in a core dump).</li>
+<li>Turning off speculative execution (or mitigating it). At the time of writing, Spectre-class vulnerabilities are still being fixed (either in software or in hardware), and new ones are coming up <a href="https://www.youtube.com/watch?v=_f7O3IfIR2k" title="Chandler Carruth. “CppCon 2018 “Spectre: Secrets, Side-Channels, Sandboxes, and Security”">[37]</a>.</li>
+<li>Techniques related to control flow, e.g., control flow balancing (making all branches spend the same amount of time).</li>
+</ul>
+<p>Most of these extra improvements require either non-portable code, operating-system-specific calls, or compiler support as well, which also makes them a good target for standardization. A subset (e.g., encryption-at-rest and locking/pinning) may be relatively easy to tackle in the near future since libraries/projects and other languages handle them already. Other improvements, however, are well in the research stage on compilers, e.g.:</p>
+<ul>
+<li>The SECURE project and GCC (stack erasure implemented as a function attribute) <a href="https://www.youtube.com/watch?v=Lg_jJLtH7R0" title="Graham Markall. “The SECURE Project and GCC”">[38]</a><a href="https://gcc.gnu.org/wiki/cauldron2018#secure" title="Graham Markall. “The SECURE project and GCC”">[39]</a><a href="https://www.embecosm.com/research/secure/" title="Embecosm. “The Security Enhancing Compilation for Use in Real Environments (SECURE) project”">[40]</a>.</li>
+<li>Research on controlling side effects in mainstream C compilers <a href="https://www.cl.cam.ac.uk/%7Erja14/Papers/whatyouc.pdf" title="Laurent Simon, David Chisnall, Ross Anderson. “What you get is what you C: Controlling side effects in mainstream C compilers”">[41]</a>.</li>
+</ul>
+<p>Furthermore, discussing the addition of any security-related features to the C and C++ languages is a complex task. Therefore, this paper attempts to only spearhead the work on this area, providing access to users to the well-known “guaranteed memory clearing” function already used in the industry as explained in the previous sections. For context, it is important to mention that, recently, there seems to be a resurgence of interest in these topics: for C, N2485 proposed to add similar functionality <a href="http://www.open-std.org/jtc1/sc22/wg14/www/docs/n2485.htm" title="Aaron Peter Bachmann. “WG14 N2485 Add explicit_memset() as non-optional part of to C2X”">[42]</a>; while within C++ there are ongoing discussions about creating a safety and security SG or SIG.</p>
+<p>Some other related improvements based on the basic building blocks can be also thought of, too:</p>
+<ul>
+<li>For instance, earlier revisions of the C++ paper <a href="http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2018/p1315r1.html" title="Miguel Ojeda. “WG21 P1315R1 `secure_val`: a secure-clear-on-move type”">[43]</a> proposed, in addition, an uncopyable class template meant to wrap a memory area on which <code>memset_explicit</code> is called on destruction/move, plus some other features (explicit read/modify/write access, locking/pinning, encryption-at-rest, etc.). This wrapper is a good approach to ensure memory is cleared even when dealing with exceptions. During the WG21 LEWGI review, it was acknowledged that similar types are in use by third-parties. Some libraries and languages feature similar types, as mentioned in the previous section.</li>
+<li>A type-modifier with similar semantics as the wrapper class template above was suggested during the WG21 LEWGI review; as well as other approaches like new keywords to mark variables to be cleared at the end of scope.</li>
+<li>Dynamically-sized string-like types (e.g., <code>secure_string</code>) may be considered useful (e.g., for passwords).</li>
+</ul>
+<p>There are, as well, other related library features that some languages provide for handling sensitive data:</p>
+<ul>
+<li>A way to read non-echoed standard input (e.g., see the <code>getpass</code> module in Python <a href="https://docs.python.org/3.7/library/getpass.html" title="Python. “Portable password input”">[44]</a>).</li>
+</ul>
+<h2>Proposal (C)</h2>
+<p>This proposal adds the <code>memset_explicit</code> function which follows the <code>memset</code> interface, semantics and naming.</p>
+<p>Two main wording alternatives are proposed (1 and 2). Alternative 1 is the same as in N2631. Alternative 2 converts the semantics into implementation-defined.</p>
+<p>Each main alternative has a variation (1b and 2b) that adds extra details on the potential clearing and avoidance of copies by implementations.</p>
+<p>The proposed wordings are with respect to N2596 C2x Working Draft.</p>
+<h3>Alternative 1: Intent semantics</h3>
+<p>After “7.24.6.1 The <code>memset</code> function”, add:</p>
+<blockquote>
+<h4>7.24.6.2 The <code>memset_explicit</code> function</h4>
+<h5>Synopsis</h5>
+<pre><code>#include &lt;string.h&gt;
+void *memset_explicit(void *s, int c, size_t n);
+</code></pre>
+<h5>Description</h5>
+<p>The <code>memset_explicit</code> function copies the value of <code>c</code> (converted to an <code>unsigned char</code>) into each of the first <code>n</code> characters of the object pointed to by <code>s</code>. The purpose of this function is to make sensitive information stored in the object inaccessible. (Footnote 1)</p>
+<p>(Footnote 1) The intention is that the memory store is always performed (i.e., never elided), regardless of optimizations. This is in contrast to calls to the <code>memset</code> function (7.24.6.1).</p>
+<h5>Returns</h5>
+<p>The <code>memset_explicit</code> function returns the value of <code>s</code>.</p>
+</blockquote>
+<p>In “B.23 String handling <code>&lt;string.h&gt;</code>”, after the <code>memset</code> line, add:</p>
+<pre><code>void *memset_explicit(void *s, int c, size_t n);
+</code></pre>
+<p>In “J.6.1 Rule based identifiers”, after the <code>memset</code> line, add:</p>
+<pre><code>memset_explicit
+</code></pre>
+<h3>Alternative 1b: Intent semantics + details on copies</h3>
+<p>After “7.24.6.1 The <code>memset</code> function”, add:</p>
+<blockquote>
+<h4>7.24.6.2 The <code>memset_explicit</code> function</h4>
+<h5>Synopsis</h5>
+<pre><code>#include &lt;string.h&gt;
+void *memset_explicit(void *s, int c, size_t n);
+</code></pre>
+<h5>Description</h5>
+<p>The <code>memset_explicit</code> function copies the value of <code>c</code> (converted to an <code>unsigned char</code>) into each of the first <code>n</code> characters of the object pointed to by <code>s</code>. The purpose of this function is to make sensitive information stored in the object inaccessible. (Footnote 1)</p>
+<p>(Footnote 1) The intention is that the memory store is always performed (i.e., never elided), regardless of optimizations. This is in contrast to calls to the <code>memset</code> function (7.24.6.1). The implementation might clear other copies of the data (e.g., intermediate values, stack frame, cache lines, spilled registers, swapped out pages, etc.) or it might avoid their creation (e.g., reducing copies, locking/pinning pages, etc.).</p>
+<h5>Returns</h5>
+<p>The <code>memset_explicit</code> function returns the value of <code>s</code>.</p>
+</blockquote>
+<p>In “B.23 String handling <code>&lt;string.h&gt;</code>”, after the <code>memset</code> line, add:</p>
+<pre><code>void *memset_explicit(void *s, int c, size_t n);
+</code></pre>
+<p>In “J.6.1 Rule based identifiers”, after the <code>memset</code> line, add:</p>
+<pre><code>memset_explicit
+</code></pre>
+<h3>Alternative 2: Implementation-defined semantics</h3>
+<p>After “7.24.6.1 The <code>memset</code> function”, add:</p>
+<blockquote>
+<h4>7.24.6.2 The <code>memset_explicit</code> function</h4>
+<h5>Synopsis</h5>
+<pre><code>#include &lt;string.h&gt;
+void *memset_explicit(void *s, int c, size_t n);
+</code></pre>
+<h5>Description</h5>
+<p>The semantics of the <code>memset_explicit</code> function are implementation-defined.</p>
+<h5>Recommended Practice</h5>
+<p>Implementations should copy the value of <code>c</code> (converted to an <code>unsigned char</code>) into each of the first <code>n</code> characters of the object pointed to by <code>s</code> in order to make sensitive information stored in the object inaccessible. (Footnote 1)</p>
+<p>(Footnote 1) The intention is that the memory store is always performed (i.e., never elided), regardless of optimizations. This is in contrast to calls to the <code>memset</code> function (7.24.6.1).</p>
+<h5>Returns</h5>
+<p>The <code>memset_explicit</code> function returns the value of <code>s</code>.</p>
+</blockquote>
+<p>In “B.23 String handling <code>&lt;string.h&gt;</code>”, after the <code>memset</code> line, add:</p>
+<pre><code>void *memset_explicit(void *s, int c, size_t n);
+</code></pre>
+<p>In “J.6.1 Rule based identifiers”, after the <code>memset</code> line, add:</p>
+<pre><code>memset_explicit
+</code></pre>
+<h3>Alternative 2b: Implementation-defined semantics + details on copies</h3>
+<p>After “7.24.6.1 The <code>memset</code> function”, add:</p>
+<blockquote>
+<h4>7.24.6.2 The <code>memset_explicit</code> function</h4>
+<h5>Synopsis</h5>
+<pre><code>#include &lt;string.h&gt;
+void *memset_explicit(void *s, int c, size_t n);
+</code></pre>
+<h5>Description</h5>
+<p>The semantics of the <code>memset_explicit</code> function are implementation-defined.</p>
+<h5>Recommended Practice</h5>
+<p>Implementations should copy the value of <code>c</code> (converted to an <code>unsigned char</code>) into each of the first <code>n</code> characters of the object pointed to by <code>s</code> in order to make sensitive information stored in the object inaccessible. (Footnote 1)</p>
+<p>(Footnote 1) The intention is that the memory store is always performed (i.e., never elided), regardless of optimizations. This is in contrast to calls to the <code>memset</code> function (7.24.6.1). The implementation might clear other copies of the data (e.g., intermediate values, stack frame, cache lines, spilled registers, swapped out pages, etc.) or it might avoid their creation (e.g., reducing copies, locking/pinning pages, etc.).</p>
+<h5>Returns</h5>
+<p>The <code>memset_explicit</code> function returns the value of <code>s</code>.</p>
+</blockquote>
+<p>In “B.23 String handling <code>&lt;string.h&gt;</code>”, after the <code>memset</code> line, add:</p>
+<pre><code>void *memset_explicit(void *s, int c, size_t n);
+</code></pre>
+<p>In “J.6.1 Rule based identifiers”, after the <code>memset</code> line, add:</p>
+<pre><code>memset_explicit
+</code></pre>
+<h2>Proposal (C++)</h2>
+<p>This proposal adds the <code>memset_explicit</code> function template which would rely on the C2x function:</p>
+<pre><code>namespace std {
+    template &lt;class T&gt;
+        requires is_trivially_copyable_v&lt;T&gt;
+            and (not is_pointer_v&lt;T&gt;)
+    void memset_explicit(T &amp; object) noexcept;
+}
+</code></pre>
+<p>The <code>memset_explicit</code> function template is equivalent to a call to <code>memset_explicit(addressof(object), 0, sizeof(object))</code>.</p>
+<p>The <code>not is_pointer_v&lt;T&gt;</code> constraint is intended to prevent unintended calls that would have cleared a pointer rather than the object it points to:</p>
+<pre><code>char buf[size];
+char * ptr = buf;
+
+std::memset_explicit(buf);               // OK, clears the array
+std::memset_explicit(ptr);               // Error
+std::memset_explicit(ptr, sizeof(ptr));  // OK, explicit
+</code></pre>
+<p>No wording is provided yet, since so far the C function has not been added to the C2x Working Draft nor the C++2y standard has updated its normative references section to import the C2x standard library.</p>
+<h2>Example implementation</h2>
+<p>A trivial example implementation (i.e., relying on OS-specific functions) can be found at <a href="https://github.com/ojeda/secure_clear/tree/master/example-implementation" title="Miguel Ojeda. “`secure_clear` Example implementation”">[45]</a>.</p>
+<h2>Acknowledgements</h2>
+<p>Thanks to Aaron Ballman, JF Bastien, David Keaton and Billy O’Neal for providing guidance about the WG14 and WG21 standardization processes. Thanks to Aaron Ballman, Peter Sewell, David Svoboda, Hubert Tong, Martin Uecker, Ville Voutilainen and others for their input on wording and the abstract machine. Thanks to Aaron Peter Bachmann for withdrawing his parallel proposal <a href="http://www.open-std.org/jtc1/sc22/wg14/www/docs/n2485.htm" title="Aaron Peter Bachmann. “WG14 N2485 Add explicit_memset() as non-optional part of to C2X”">[42]</a>. Thanks to Robert C. Seacord for his review and proofreading of a previous revision. Thanks to Ryan McDougall for presenting an early revision at WG21 Kona 2019. Thanks to Graham Markall for his input regarding the SECURE project and the current state of compiler support for related features. Thanks to Martin Sebor for pointing out the SECURE project. Thanks to BSI for suggesting constraining the template to non-pointers. Thanks to Philipp Klaus Krause for raising the discussion in the OpenBSD list. Thanks to everyone else that joined all the different discussions.</p>
+<h2>References</h2>
+<ol>
+<li>SEI CERT C Coding Standard. “MSC06-C. Beware of compiler optimizations” — <a href="https://wiki.sei.cmu.edu/confluence/display/c/MSC06-C.+Beware+of+compiler+optimizations" title="SEI CERT C Coding Standard. “MSC06-C. Beware of compiler optimizations”"><em>https://wiki.sei.cmu.edu/confluence/display/c/MSC06-C.+Beware+of+compiler+optimizations</em></a></li>
+<li>Common Weakness Enumeration. “CWE-14: Compiler Removal of Code to Clear Buffers” — <a href="https://cwe.mitre.org/data/definitions/14.html" title="Common Weakness Enumeration. “CWE-14: Compiler Removal of Code to Clear Buffers”"><em>https://cwe.mitre.org/data/definitions/14.html</em></a></li>
+<li>Viva64. “V597. The compiler could delete the <code>memset</code> function call (…)” — <a href="https://www.viva64.com/en/w/v597/" title="Viva64. “V597. The compiler could delete the `memset` function call (...)”"><em>https://www.viva64.com/en/w/v597/</em></a></li>
+<li>David Svoboda. “WG14 N1381 #5 <code>memset_s()</code> to clear memory, without fear of removal” — <a href="http://www.open-std.org/jtc1/sc22/wg14/www/docs/n1381.pdf" title="David Svoboda. “WG14 N1381 #5 `memset_s()` to clear memory, without fear of removal”"><em>http://www.open-std.org/jtc1/sc22/wg14/www/docs/n1381.pdf</em></a></li>
+<li>OpenSSL. “<code>openssl/crypto/ec/curve448/utils.c</code> (old code)” — <a href="https://github.com/openssl/openssl/blob/f8385b0fc0215b378b61891582b0579659d0b9f4/crypto/ec/curve448/utils.c" title="OpenSSL. “`openssl/crypto/ec/curve448/utils.c` (old code)”"><em>https://github.com/openssl/openssl/blob/f8385b0fc0215b378b61891582b0579659d0b9f4/crypto/ec/curve448/utils.c</em></a></li>
+<li>OpenSSL. “<code>OPENSSL_cleanse</code> (implementation)” — <a href="https://github.com/openssl/openssl/blob/master/crypto/mem_clr.c" title="OpenSSL. “`OPENSSL_cleanse` (implementation)”"><em>https://github.com/openssl/openssl/blob/master/crypto/mem_clr.c</em></a></li>
+<li>OpenSSL. “<code>openssl/crypto/mem.c</code> (old code)” — <a href="https://github.com/openssl/openssl/blob/104ce8a9f02d250dd43c255eb7b8747e81b29422/crypto/mem.c#L143" title="OpenSSL. “`openssl/crypto/mem.c` (old code)”"><em>https://github.com/openssl/openssl/blob/104ce8a9f02d250dd43c255eb7b8747e81b29422/crypto/mem.c#L143</em></a></li>
+<li>OpenSSL. “<code>openssl/crypto/sparccpuid.S</code> (example of assembly implementation)” — <a href="https://github.com/openssl/openssl/blob/master/crypto/sparccpuid.S#L363" title="OpenSSL. “`openssl/crypto/sparccpuid.S` (example of assembly implementation)”"><em>https://github.com/openssl/openssl/blob/master/crypto/sparccpuid.S#L363</em></a></li>
+<li>Linux Kernel. “<code>memzero_explicit</code> (implementation)” — <a href="https://elixir.bootlin.com/linux/v4.18.5/source/lib/string.c#L706" title="Linux Kernel. “`memzero_explicit` (implementation)”"><em>https://elixir.bootlin.com/linux/v4.18.5/source/lib/string.c#L706</em></a></li>
+<li>GCC. “Options Controlling C Dialect” — <a href="https://gcc.gnu.org/onlinedocs/gcc/C-Dialect-Options.html" title="GCC. “Options Controlling C Dialect”"><em>https://gcc.gnu.org/onlinedocs/gcc/C-Dialect-Options.html</em></a></li>
+<li>Linux man-pages. “<code>bzero</code>, <code>explicit_bzero</code> - zero a byte string” — <a href="http://man7.org/linux/man-pages/man3/bzero.3.html" title="Linux man-pages. “`bzero`, `explicit_bzero` - zero a byte string”"><em>http://man7.org/linux/man-pages/man3/bzero.3.html</em></a></li>
+<li>Microsoft. “<code>SecureZeroMemory</code> function” — <a href="https://msdn.microsoft.com/en-us/library/windows/desktop/aa366877(v=vs.85).aspx" title="Microsoft. “`SecureZeroMemory` function”"><em>https://msdn.microsoft.com/en-us/library/windows/desktop/aa366877(v=vs.85).aspx</em></a></li>
+<li>Linux Kernel. “<code>memzero_explicit</code>” — <a href="https://www.kernel.org/doc/htmldocs/kernel-api/API-memzero-explicit.html" title="Linux Kernel. “`memzero_explicit`”"><em>https://www.kernel.org/doc/htmldocs/kernel-api/API-memzero-explicit.html</em></a></li>
+<li>OpenSSL. “<code>OPENSSL_cleanse</code>” — <a href="https://www.openssl.org/docs/man1.1.1/man3/OPENSSL_cleanse.html" title="OpenSSL. “`OPENSSL_cleanse`”"><em>https://www.openssl.org/docs/man1.1.1/man3/OPENSSL_cleanse.html</em></a></li>
+<li>OpenSSL. “Reimplement non-asm <code>OPENSSL_cleanse()</code> #455” — <a href="https://github.com/openssl/openssl/pull/455" title="OpenSSL. “Reimplement non-asm `OPENSSL_cleanse()` #455”"><em>https://github.com/openssl/openssl/pull/455</em></a></li>
+<li>Colin Percival. “How to zero a buffer” — <a href="http://www.daemonology.net/blog/2014-09-04-how-to-zero-a-buffer.html" title="Colin Percival. “How to zero a buffer”"><em>http://www.daemonology.net/blog/2014-09-04-how-to-zero-a-buffer.html</em></a></li>
+<li>Colin Percival et. al.. “How to zero a buffer (daemonology.net)” — <a href="https://news.ycombinator.com/item?id=8270136" title="Colin Percival et. al.. “How to zero a buffer (daemonology.net)”"><em>https://news.ycombinator.com/item?id=8270136</em></a></li>
+<li>Daniel Trebbien et. al.. “Mac OS X equivalent of <code>SecureZeroMemory</code> / <code>RtlSecureZeroMemory</code>?” — <a href="https://stackoverflow.com/questions/13299420/" title="Daniel Trebbien et. al.. “Mac OS X equivalent of `SecureZeroMemory` / `RtlSecureZeroMemory`?”"><em>https://stackoverflow.com/questions/13299420/</em></a></li>
+<li>Sandy Harris. “Optimising away <code>memset()</code> calls?” — <a href="https://gcc.gnu.org/ml/gcc-help/2014-10/msg00047.html" title="Sandy Harris. “Optimising away `memset()` calls?”"><em>https://gcc.gnu.org/ml/gcc-help/2014-10/msg00047.html</em></a></li>
+<li>Felix von Leitner. “Bug 15495 - dead store pass ignores memory clobbering asm statement” — <a href="https://bugs.llvm.org/show_bug.cgi?id=15495" title="Felix von Leitner. “Bug 15495 - dead store pass ignores memory clobbering asm statement”"><em>https://bugs.llvm.org/show_bug.cgi?id=15495</em></a></li>
+<li>zatimend. “Bug 82041 - <code>memset</code> optimized out in <code>random.c</code>” — <a href="https://bugzilla.kernel.org/show_bug.cgi?id=82041" title="zatimend. “Bug 82041 - `memset` optimized out in `random.c`”"><em>https://bugzilla.kernel.org/show_bug.cgi?id=82041</em></a></li>
+<li>Daniel Borkmann. “[PATCH] random: add and use memzero_explicit() for clearing data” — <a href="https://lore.kernel.org/lkml/1408996899-4892-1-git-send-email-dborkman@redhat.com/" title="Daniel Borkmann. “[PATCH] random: add and use memzero_explicit() for clearing data”"><em>https://lore.kernel.org/lkml/1408996899-4892-1-git-send-email-dborkman@redhat.com/</em></a></li>
+<li>Larry Jones. “WG14 N1548 Working Draft with diff marks against N1256” — <a href="http://www.open-std.org/jtc1/sc22/wg14/www/docs/n1548.pdf" title="Larry Jones. “WG14 N1548 Working Draft with diff marks against N1256”"><em>http://www.open-std.org/jtc1/sc22/wg14/www/docs/n1548.pdf</em></a></li>
+<li>Miguel Ojeda. “Test for <code>memset_s</code> in gcc 8.2 at Godbolt” — <a href="https://godbolt.org/g/M7MyRg" title="Miguel Ojeda. “Test for `memset_s` in gcc 8.2 at Godbolt”"><em>https://godbolt.org/g/M7MyRg</em></a></li>
+<li>Miguel Ojeda. “Test for <code>memset_s</code> in clang 6.0.0 at Godbolt” — <a href="https://godbolt.org/g/ZwbkgY" title="Miguel Ojeda. “Test for `memset_s` in clang 6.0.0 at Godbolt”"><em>https://godbolt.org/g/ZwbkgY</em></a></li>
+<li>Miguel Ojeda. “Test for <code>memset_s</code> in MSVC 19 2017 at Godbolt” — <a href="https://godbolt.org/g/FtrVJ8" title="Miguel Ojeda. “Test for `memset_s` in MSVC 19 2017 at Godbolt”"><em>https://godbolt.org/g/FtrVJ8</em></a></li>
+<li>Miguel Ojeda. “Test for <code>memset_s</code> in icc 18.0.0 at Godbolt” — <a href="https://godbolt.org/g/vHZNrW" title="Miguel Ojeda. “Test for `memset_s` in icc 18.0.0 at Godbolt”"><em>https://godbolt.org/g/vHZNrW</em></a></li>
+<li>Carlos O’Donell, Martin Sebor. “WG14 N1967 Field Experience With Annex K - Bounds Checking Interfaces” — <a href="http://www.open-std.org/jtc1/sc22/wg14/www/docs/n1967.htm" title="Carlos O'Donell, Martin Sebor. “WG14 N1967 Field Experience With Annex K - Bounds Checking Interfaces”"><em>http://www.open-std.org/jtc1/sc22/wg14/www/docs/n1967.htm</em></a></li>
+<li>Robert C. Seacord. “WG14 N2336 Bounds-checking Interfaces: Field Experience and Future Directions” — <a href="http://www.open-std.org/jtc1/sc22/wg14/www/docs/n2336.pdf" title="Robert C. Seacord. “WG14 N2336 Bounds-checking Interfaces: Field Experience and Future Directions”"><em>http://www.open-std.org/jtc1/sc22/wg14/www/docs/n2336.pdf</em></a></li>
+<li>Roderick Chapman. “Sanitizing Sensitive Data: How to get it Right (or at least Less Wrong…)” — <a href="https://proteancode.com/wp-content/uploads/2017/06/ae2017_final3_for_web.pdf" title="Roderick Chapman. “Sanitizing Sensitive Data: How to get it Right (or at least Less Wrong…)”"><em>https://proteancode.com/wp-content/uploads/2017/06/ae2017_final3_for_web.pdf</em></a></li>
+<li>Roderick Chapman. “Sanitizing Sensitive Data: How to get it Right (or at least Less Wrong…)” — <a href="https://link.springer.com/chapter/10.1007%2F978-3-319-60588-3_3" title="Roderick Chapman. “Sanitizing Sensitive Data: How to get it Right (or at least Less Wrong…)”"><em>https://link.springer.com/chapter/10.1007%2F978-3-319-60588-3_3</em></a></li>
+<li>Tony Arcieri. “<code>secrecy</code> Rust library” — <a href="https://crates.io/crates/secrecy" title="Tony Arcieri. “`secrecy` Rust library”"><em>https://crates.io/crates/secrecy</em></a></li>
+<li>Greg V. “<code>secstr</code> Rust library” — <a href="https://crates.io/crates/secstr" title="Greg V. “`secstr` Rust library”"><em>https://crates.io/crates/secstr</em></a></li>
+<li>Tony Arcieri. “<code>zeroize</code> Rust library” — <a href="https://crates.io/crates/zeroize" title="Tony Arcieri. “`zeroize` Rust library”"><em>https://crates.io/crates/zeroize</em></a></li>
+<li>Microsoft. “<code>SecureString</code> Class” — <a href="https://docs.microsoft.com/en-us/dotnet/api/system.security.securestring" title="Microsoft. “`SecureString` Class”"><em>https://docs.microsoft.com/en-us/dotnet/api/system.security.securestring</em></a></li>
+<li>Vincent Hanquez. “<code>securemem</code>: abstraction to an auto scrubbing and const time eq, memory chunk.” — <a href="https://hackage.haskell.org/package/securemem" title="Vincent Hanquez. “`securemem`: abstraction to an auto scrubbing and const time eq, memory chunk.”"><em>https://hackage.haskell.org/package/securemem</em></a></li>
+<li>Chandler Carruth. “CppCon 2018 “Spectre: Secrets, Side-Channels, Sandboxes, and Security” — <a href="https://www.youtube.com/watch?v=_f7O3IfIR2k" title="Chandler Carruth. “CppCon 2018 “Spectre: Secrets, Side-Channels, Sandboxes, and Security”"><em>https://www.youtube.com/watch?v=_f7O3IfIR2k</em></a></li>
+<li>Graham Markall. “The SECURE Project and GCC” — <a href="https://www.youtube.com/watch?v=Lg_jJLtH7R0" title="Graham Markall. “The SECURE Project and GCC”"><em>https://www.youtube.com/watch?v=Lg_jJLtH7R0</em></a></li>
+<li>Graham Markall. “The SECURE project and GCC” — <a href="https://gcc.gnu.org/wiki/cauldron2018#secure" title="Graham Markall. “The SECURE project and GCC”"><em>https://gcc.gnu.org/wiki/cauldron2018#secure</em></a></li>
+<li>Embecosm. “The Security Enhancing Compilation for Use in Real Environments (SECURE) project” — <a href="https://www.embecosm.com/research/secure/" title="Embecosm. “The Security Enhancing Compilation for Use in Real Environments (SECURE) project”"><em>https://www.embecosm.com/research/secure/</em></a></li>
+<li>Laurent Simon, David Chisnall, Ross Anderson. “What you get is what you C: Controlling side effects in mainstream C compilers” — <a href="https://www.cl.cam.ac.uk/%7Erja14/Papers/whatyouc.pdf" title="Laurent Simon, David Chisnall, Ross Anderson. “What you get is what you C: Controlling side effects in mainstream C compilers”"><em>https://www.cl.cam.ac.uk/~rja14/Papers/whatyouc.pdf</em></a></li>
+<li>Aaron Peter Bachmann. “WG14 N2485 Add explicit_memset() as non-optional part of to C2X” — <a href="http://www.open-std.org/jtc1/sc22/wg14/www/docs/n2485.htm" title="Aaron Peter Bachmann. “WG14 N2485 Add explicit_memset() as non-optional part of to C2X”"><em>http://www.open-std.org/jtc1/sc22/wg14/www/docs/n2485.htm</em></a></li>
+<li>Miguel Ojeda. “WG21 P1315R1 <code>secure_val</code>: a secure-clear-on-move type” — <a href="http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2018/p1315r1.html" title="Miguel Ojeda. “WG21 P1315R1 `secure_val`: a secure-clear-on-move type”"><em>http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2018/p1315r1.html</em></a></li>
+<li>Python. “Portable password input” — <a href="https://docs.python.org/3.7/library/getpass.html" title="Python. “Portable password input”"><em>https://docs.python.org/3.7/library/getpass.html</em></a></li>
+<li>Miguel Ojeda. “<code>secure_clear</code> Example implementation” — <a href="https://github.com/ojeda/secure_clear/tree/master/example-implementation" title="Miguel Ojeda. “`secure_clear` Example implementation”"><em>https://github.com/ojeda/secure_clear/tree/master/example-implementation</em></a></li>
+</ol>
+
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/10.5.0/highlight.min.js" integrity="sha256-C2mighDO4oHT14QAC90SI2uWveV+Dot/8MdIzzhYMvU=" crossorigin="anonymous"></script>
+<script>
+    hljs.configure({
+        languages: ['c++'],
+    });
+    hljs.initHighlightingOnLoad();
+</script>
+</body>
+</html>
